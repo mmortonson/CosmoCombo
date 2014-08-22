@@ -107,7 +107,7 @@ class Session(object):
 
     def define_new_chain(self):
         files = []
-        for f in raw_input('Chain file names?\n> ').split():
+        for f in raw_input('\nChain file names?\n> ').split():
             files += glob.glob(f)
         name = raw_input('Label for chain?\n> ')
         # check if name is already in history; if so, replace with new
@@ -117,9 +117,29 @@ class Session(object):
         self.history['chains'].append((name, files))
         return (name, files)
 
+    def choose_parameters(self, pdf):
+        # choose one or more parameters 
+        # (enter names or pick from chain column list)
+        print '\nEnter one or more parameter names (on one line),'
+        print 'or press Enter to see a list of available parameters:'
+        parameters = raw_input('> ').split()
+        if len(parameters) == 0:
+            pdf.display_parameters()
+            parameters = self.choose_parameters(pdf)
+        else:
+            extra_parameters = list(np.array(parameters)[np.where([
+                    p not in pdf.parameters for p in parameters])[0]])
+            if len(extra_parameters) > 0:
+                print 'The PDF ' + pdf.name + \
+                    ' does not have the following parameters:'
+                print ', '.join(extra_parameters)
+                parameters = self.choose_parameters(pdf)
+        return parameters
+
     def compute_1d_stats(self):
         pdf = self.choose_pdf(require_data=True)
-        pdf.compute_1d_stats()
+        parameters = self.choose_parameters(pdf)
+        pdf.compute_1d_stats(parameters)
 
     def set_up_plot(self):
         print 'Setting up plot'
@@ -210,6 +230,7 @@ class PostPDF(object):
     def __init__(self, name, model):
         self.rename(name)
         self.model = model
+        self.parameters = []
         self.chain = None
         self.likelihoods = []
 
@@ -219,16 +240,30 @@ class PostPDF(object):
         # check if model is consistent?
 
         self.chain = MCMCChain(name, files)
+        self.add_parameters(self.chain.parameters)
 
-    def compute_1d_stats(self):
+    def add_parameters(self, new_parameters):
+        for p in new_parameters:
+            if p not in self.parameters:
+                self.parameters.append(p)
+
+    def display_parameters(self):
+        print textwrap.fill(', '.join(self.parameters))
+
+    def compute_1d_stats(self, parameters):
         # how to do this if there is no chain, only likelihoods?
 
-        # choose a parameter (enter name or pick from chain column list)
-
-        # create a ChainParameter object for that parameter
-
-        # print stats
-
+        for p in parameters:
+            if p not in self.parameters:
+                sys.exit('The PDF ' + self.name + \
+                             ' does not have the parameter ' + str(p))
+            # find the index for the parameter
+            index = np.where(np.array(self.chain.parameters) == p)[0][0]
+            # create a ChainParameter object for each parameter
+            cp = ChainParameter(self.chain, index)
+            # print stats
+            fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
+            print fmt_str.format(p, cp.mean(), cp.standard_deviation())
 
     def rename(self, new_name):
         # check that name is unique
@@ -264,7 +299,8 @@ class MCMCChain(object):
         if paramname_file is None:
             paramname_file = '_'.join(chain_files[0].split('_')[:-1]) + \
                 '.paramnames'
-        self.column_names = self.get_parameter_names(paramname_file)
+        self.parameters = self.get_parameter_names(paramname_file)
+        self.column_names = list(self.parameters)
         self.column_names.insert(mult_column, 'mult')
         self.column_names.insert(lnlike_column, '-ln(L)')
 
