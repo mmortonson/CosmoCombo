@@ -63,9 +63,6 @@ class Session(object):
                     options.append(key)
         return options
 
-    def get_old_pdf(self):
-        pass
-
     def set_up_pdf(self):
         name = raw_input('\nLabel for constraint?\n> ')
         model = raw_input('Model?\n> ')
@@ -85,6 +82,11 @@ class Session(object):
             return None
         else:
             return pdfs[m.i_choice]
+
+    def rename_pdf(self):
+        pdf = self.choose_pdf()
+        new_name = raw_input('\nNew name?\n> ')
+        pdf.rename(new_name)
 
     def add_chain(self):
         pdf = self.choose_pdf(require_no_chain=True)
@@ -147,6 +149,12 @@ class Session(object):
 
     def plot_constraint(self):
         print 'Plotting constraint'
+
+    def pdf_exists(self):
+        if len(self.pdfs) > 0:
+            return True
+        else:
+            return False
 
     def pdf_without_chain_exists(self):
         answer = False
