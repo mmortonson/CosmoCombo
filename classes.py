@@ -4,6 +4,11 @@ import glob
 import json
 import textwrap
 import numpy as np
+import matplotlib
+matplotlib.use('GTKAgg')
+import matplotlib.pyplot as plt
+import default_plot_settings
+
 
 class Session(object):
 
@@ -50,6 +55,7 @@ class Session(object):
         while menu.choice != menu.exit:
             if options[menu.choice]['condition']():
                 options[menu.choice]['action']()
+            print self.pdfs
             menu.get_choice(options=self.active_options(options))
         self.save_and_exit()
 
@@ -85,8 +91,9 @@ class Session(object):
 
     def rename_pdf(self):
         pdf = self.choose_pdf()
-        new_name = raw_input('\nNew name?\n> ')
-        pdf.rename(new_name)
+        if pdf is not None:
+            new_name = raw_input('\nNew name?\n> ')
+            pdf.rename(new_name)
 
     def add_chain(self):
         pdf = self.choose_pdf(require_no_chain=True)
@@ -140,15 +147,64 @@ class Session(object):
 
     def compute_1d_stats(self):
         pdf = self.choose_pdf(require_data=True)
-        parameters = self.choose_parameters(pdf)
-        pdf.compute_1d_stats(parameters)
+        if pdf is not None:
+            parameters = self.choose_parameters(pdf)
+            pdf.compute_1d_stats(parameters)
 
     def set_up_plot(self):
-        print 'Setting up plot'
+        n_rows = self.get_input_integer('\nNumber of subplot rows?\n> ',
+            error_text='Number of rows must be an integer > 0.')
+        n_cols = self.get_input_integer('Number of subplot columns?\n> ',
+            error_text='Number of columns must be an integer > 0.')
+        if n_rows < 1 or n_cols < 1:
+            print 'Must have > 0 rows and columns.'
+            self.set_up_plot()
         self.plot = Plot()
+        self.plot.set_up_plot_grid(n_rows, n_cols)
+        plt.show(block=False)
+        print '(If you cannot see the plot, try changing the '
+        print 'matplotlib backend. Current backend is ' + \
+            plt.get_backend() + '.)'
 
     def plot_constraint(self):
-        print 'Plotting constraint'
+        pdf = self.choose_pdf(require_data=True)
+        if pdf is not None:
+            # get row and column of subplot
+            n_rows = self.plot.n_rows
+            n_cols = self.plot.n_cols
+            if n_rows > 1:
+                row = self.get_input_integer( \
+                    '\nSubplot row (0-' + str(self.plot.n_rows - 1) + ')?\n> ',
+                    error_text='Must choose an integer.')
+            else:
+                row = 0
+            if n_cols > 1:
+                col = self.get_input_integer( \
+                    '\nSubplot column (0-' + str(str(self.plot.n_cols - 1)) + \
+                        ')?\n> ',
+                    error_text='Must choose an integer.')
+            else:
+                col = 0
+            if row < 0 or row > self.plot.n_rows - 1 or \
+                    col < 0 or col > self.plot.n_cols - 1:
+                print 'Row or column number is out of required range.'
+                self.plot_constraint()
+            ax = self.plot.axes[row][col]
+            if len(ax.pdfs) == 0:
+                self.set_up_subplot(row, col, pdf)
+            n_dim = len(ax.parameters)
+            if n_dim == 1:
+                self.plot.plot_1d_pdf(ax, pdf)
+            elif n_dim == 2:
+                self.plot.plot_2d_pdf(ax, pdf)
+            plt.draw()
+
+    def set_up_subplot(self, row, col, pdf):
+        ax = self.plot.axes[row][col]
+        ax.parameters = self.choose_parameters(pdf)
+        if len(ax.parameters) > 2:
+            print 'Number of parameters must be 1 or 2.'
+            self.set_up_subplot(row, col)
 
     def pdf_exists(self):
         if len(self.pdfs) > 0:
@@ -176,6 +232,26 @@ class Session(object):
         else:
             return False
 
+    def plot_and_pdf_with_data_exist(self):
+        if self.plot and self.pdf_with_data_exists():
+            return True
+        else:
+            return False
+
+    def get_input_integer(self, prompt, 
+                          error_text='Input must be an integer.',
+                          error_action='retry'):
+        value = 0
+        try:
+            value = int(raw_input(prompt))
+        except ValueError as e:
+            if error_action == 'retry':
+                print error_text
+                value = self.get_input_integer(prompt, error_text=error_text,
+                                               error_action=error_action)
+            else:
+               sys.exit(error_text)
+        return value
 
 class Settings(object):
 
@@ -230,6 +306,45 @@ class Menu(object):
 class Plot(object):
 
     def __init__(self):
+        self.n_rows = 1
+        self.n_cols = 1
+
+    def set_up_plot_grid(self, n_rows, n_cols):
+        # assume all subplots occupy a single row and column for now
+        # (also possible to use gridspec for plots that span multiple
+        #  rows/columns - see http://matplotlib.org/users/gridspec.html)
+        self.n_rows = n_rows
+        self.n_cols = n_cols
+        self.plot_grid = matplotlib.gridspec.GridSpec(n_rows, n_cols)
+        self.axes = []
+        for i in range(n_rows):
+            row = []
+            for j in range(n_cols):
+                row.append(plt.subplot(self.plot_grid[i, j]))
+            self.axes.append(row)
+        for ax_row in self.axes:
+            for ax in ax_row:
+                ax.pdfs = []
+
+    def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
+        parameter = pdf.get_chain_parameter(ax.parameters[0])
+        bin_width = parameter.standard_deviation() / float(bins_per_sigma)
+        number_of_bins = (parameter.values.max()-parameter.values.min())/ \
+                             bin_width
+        pdf_1d, bin_edges = np.histogram(parameter.values, bins=number_of_bins,
+                                         weights=parameter.chain.multiplicity, 
+                                         density=True)
+        bin_centers = 0.5*(bin_edges[:-1] + bin_edges[1:])
+        # trim bins at either end with prob./max(pdf_1d) < p_min_frac
+        while pdf_1d[0] < p_min_frac*pdf_1d.max():
+            pdf_1d = np.delete(pdf_1d, 0)
+            bin_centers = np.delete(bin_centers, 0)
+        while pdf_1d[-1] < p_min_frac*pdf_1d.max():
+            pdf_1d = np.delete(pdf_1d, -1)
+            bin_centers = np.delete(bin_centers, -1)
+        ax.plot(bin_centers, pdf_1d)
+
+    def plot_2d_pdf(self, ax, pdf):
         pass
 
 
@@ -258,18 +373,20 @@ class PostPDF(object):
     def display_parameters(self):
         print textwrap.fill(', '.join(self.parameters))
 
+    def get_chain_parameter(self, parameter):
+        if parameter not in self.parameters:
+            sys.exit('The PDF ' + self.name + \
+                         ' does not have the parameter ' + str(parameter))
+        # find the index for the parameter
+        index = np.where(np.array(self.chain.parameters) == parameter)[0][0]
+        # create a ChainParameter object for each parameter
+        return ChainParameter(self.chain, index)
+
     def compute_1d_stats(self, parameters):
         # how to do this if there is no chain, only likelihoods?
 
         for p in parameters:
-            if p not in self.parameters:
-                sys.exit('The PDF ' + self.name + \
-                             ' does not have the parameter ' + str(p))
-            # find the index for the parameter
-            index = np.where(np.array(self.chain.parameters) == p)[0][0]
-            # create a ChainParameter object for each parameter
-            cp = ChainParameter(self.chain, index)
-            # print stats
+            cp = self.get_chain_parameter(p)
             fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
             print fmt_str.format(p, cp.mean(), cp.standard_deviation())
 
@@ -416,6 +533,7 @@ class ChainParameter(object):
     def fraction_greater_than(self, value):
         return 1.-self.fraction_less_than(value)
 
+    """
     def pdf_1d(self, bins_per_sigma, p_min_frac=0.01):
         bin_width = self.standard_deviation() / float(bins_per_sigma)
         number_of_bins = (self.values.max()-self.values.min())/ \
@@ -432,7 +550,7 @@ class ChainParameter(object):
             pdf = np.delete(pdf, -1)
             bin_centers = np.delete(bin_centers, -1)
         return (bin_centers, pdf)
-
+    """
 
 class DerivedParameter(ChainParameter):
 # use supplied function to combine columns from the chain
