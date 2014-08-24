@@ -55,7 +55,6 @@ class Session(object):
         while menu.choice != menu.exit:
             if options[menu.choice]['condition']():
                 options[menu.choice]['action']()
-            print self.pdfs
             menu.get_choice(options=self.active_options(options))
         self.save_and_exit()
 
@@ -75,7 +74,7 @@ class Session(object):
         self.pdfs += [PostPDF(name, model)]
 
     def choose_pdf(self, require_data=False, require_no_chain=False):
-        pdfs = self.pdfs
+        pdfs = list(self.pdfs)
         for pdf in pdfs:
             if (require_no_chain and pdf.chain) or \
                     (require_data and (pdf.chain is None) and \
