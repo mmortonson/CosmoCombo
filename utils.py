@@ -1,4 +1,6 @@
-import os, errno
+import os
+import os.path
+import errno
 
 def check_path(file):
     """ Check whether a path to a file exists, and if not, create it.
@@ -26,3 +28,14 @@ def open_with_path(file, flag):
             raise
 
     return open_file
+
+def open_if_exists(file, flag):
+    """
+    Check if a file exists. If so open for reading or writing
+    (set by flag). If not print error message and exit.
+    """
+    if os.path.isfile(file):
+        return open(file, flag)
+    else:
+        sys.exit('File ' + str(file) + ' not found.')
+

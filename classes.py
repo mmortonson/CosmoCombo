@@ -8,7 +8,7 @@ import matplotlib
 matplotlib.use('GTKAgg')
 import matplotlib.pyplot as plt
 import default_plot_settings
-
+import utils
 
 class Session(object):
 
@@ -403,12 +403,9 @@ class MCMCChain(object):
         self.rename(name)
         first_file = True
         for chain_file in chain_files:
-            if os.path.isfile(chain_file):
-                reader = open(chain_file, 'r')
-                new_samples = np.loadtxt(reader)
-                reader.close()
-            else:
-                sys.exit('File ' + str(chain_file) + ' not found.')
+            reader = utils.open_if_exists(chain_file, 'r')
+            new_samples = np.loadtxt(reader)
+            reader.close()
             if first_file:
                 self.samples = np.copy(new_samples)
                 first_file = False
@@ -429,16 +426,13 @@ class MCMCChain(object):
         self.column_names.insert(lnlike_column, '-ln(L)')
 
     def get_parameter_names(self, paramname_file):
-        if os.path.isfile(paramname_file):
-            paramname_reader = open(paramname_file, 'r')
-            lines = paramname_reader.readlines()
-            paramname_reader.close()
-            parameters = []
-            for line in lines:
-                # remove trailing * used to denote derived parameters
-                parameters.append( line.strip().split()[0].split('*')[0] )
-        else:
-            sys.exit('File ' + str(paramname_file) + ' not found.')
+        paramname_reader = utils.open_if_exists(paramname_file, 'r')
+        lines = paramname_reader.readlines()
+        paramname_reader.close()
+        parameters = []
+        for line in lines:
+            # remove trailing * used to denote derived parameters
+            parameters.append( line.strip().split()[0].split('*')[0] )
         return parameters
 
     """
