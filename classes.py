@@ -1,5 +1,6 @@
 import sys
 import os.path
+import time
 import glob
 import json
 import textwrap
@@ -16,27 +17,41 @@ class Session(object):
         self.settings = Settings()
         self.history_file = '.session_history'
         self.name = name
-        self.path = path
         self.save_log = save_log
+        if save_log:
+            self.log_file = os.path.join('Logs', time.strftime('%Y-%m-%d'), 
+                                         name)
         self.plot = None
         self.pdfs = []
+        log_reader = None
         # if path is given, search it for the named log (error if not found)
-
+        if path:
+            log_reader = utils.open_if_exists(os.path.join(path, name), 'r')
         # if no path given, search multiple paths for named log file
-
+        else:
+            log_paths = os.listdir('Logs')
+            for x in log_paths:
+                p = os.path.join('Logs', x)
+                if os.path.isdir(p):
+                    print os.path.join(p, name)
+                if os.path.isdir(p) and os.path.isfile(os.path.join(p, name)):
+                    log_reader = open(os.path.join(p, name), 'r')
         # if existing log found, set up environment using old settings
-
+        if log_reader:
+            self.load_log(log_reader)
         # if not found, notify that new log file is assumed
-
-        if self.save_log:
-            print 'Session name:', self.name
+        elif self.save_log:
+            print 'No log file found. Creating new file:\n    ' + \
+                self.log_file
 
         # check for file with inputs from all previous sessions
         # (e.g. chains, likelihoods, joint pdfs) and load it
         self.load_history()
 
-    def load_settings(self):
-        pass
+    def load_log(self, reader):
+        # read from file and fill self.settings
+
+        reader.close()
 
     def load_history(self):
         if os.path.isfile(self.history_file):
@@ -47,9 +62,14 @@ class Session(object):
         
     def save_and_exit(self):
         # save settings
+        if self.save_log:
+            writer = utils.open_with_path(self.log_file, 'w')
+            # write settings to log file
+
+            writer.close()
 
         # save history
-        history_writer = open(self.history_file, 'w')
+        history_writer = utils.open_with_path(self.history_file, 'w')
         history_writer.write(json.dumps(self.history))
         history_writer.close()
 
