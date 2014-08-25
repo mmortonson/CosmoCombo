@@ -101,10 +101,19 @@ class Session(object):
         # or get files and name for new chain (if new, save to file)
         if pdf is not None:
             if len(self.history['chains']) > 0:
-                options = [ch[0] + ' (' + ', '.join(ch[1]) + ')' for \
-                               ch in self.history['chains']]
-                m = Menu(options=options, exit_str='New chain',
-                         header='Choose a chain:')
+                #options = [ch[0] + ' (' + ', '.join(ch[1]) + ')' for \
+                #               ch in self.history['chains']]
+                options = [ch[0] for ch in self.history['chains']]
+                details = ['Chains:\n' + '\n'.join(
+                        [textwrap.fill(s, initial_indent='    ',
+                                       subsequent_indent='        ') \
+                             for s in sorted(ch[1])]) \
+                               for ch in self.history['chains']]
+                m = Menu(options=options, more=details,
+                         exit_str='New chain',
+                         header=['Choose a chain: ' \
+                                     '(add ? to the number to get ' \
+                                     'more info on a chain)'][0])
                 m.get_choice()
                 if m.choice == m.exit:
                     pdf.add_chain(*self.define_new_chain())
@@ -260,7 +269,7 @@ class Settings(object):
 
 class Menu(object):
 
-    def __init__(self, options=None, exit_str='Exit', header=None):
+    def __init__(self, options=None, more=None, exit_str='Exit', header=None):
         self.choice = None
         self.i_choice=None
         self.exit = exit_str
@@ -270,11 +279,13 @@ class Menu(object):
             self.update_options(options)
         else:
             self.options = [self.exit]
+        self.more = more
 
     def update_options(self, options):
         self.options = list(options) + [self.exit]
 
     def get_choice(self, options=None):
+        more_info = False
         if options:
             self.update_options(options)
         print
@@ -284,9 +295,14 @@ class Menu(object):
             print textwrap.fill(str(i) + ': ' + str(opt), 
                                 initial_indent='',
                                 subsequent_indent='    ')
+        response = raw_input(self.prompt).strip()
+        # check whether more info is requested
+        if self.more and response[-1] == '?':
+            more_info = True
+            response = response[:-1]
         # get an integer
         try:
-            i_choice = int(raw_input(self.prompt))
+            i_choice = int(response)
         except ValueError as e:
             i_choice = -1
         # check that the integer corresponds to a valid option
@@ -296,6 +312,10 @@ class Menu(object):
         else:
             print 'Not a valid option. Enter a number between 0 and ' + \
                 str(len(self.options)-1) + ':'
+            self.get_choice()
+        # provide more info on a particular choice
+        if more_info:
+            print str(self.more[self.i_choice])
             self.get_choice()
 
     def add_option(self, position=None):
