@@ -9,26 +9,26 @@ from collections import OrderedDict
 current_time = time.strftime('%Z.%H.%M.%S')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-s', '--script', 
-                    help='name of new or existing session script')
+parser.add_argument('-l', '--log', 
+                    help='name of new or existing session log file')
 parser.add_argument('-d', '--dir',
-                    help='directory to search for existing session script')
+                    help='directory to search for existing log file')
 args = parser.parse_args()
 
-if args.script:
+if args.log:
     if args.dir:
-        session = classes.Session(args.script, path=args.dir)
+        session = classes.Session(args.log, path=args.dir)
     else:
-        session = classes.Session(args.script)
+        session = classes.Session(args.log)
 else:
-    session = classes.Session('session.' + current_time + '.scr')
+    session = classes.Session('session.' + current_time + '.log')
 
 # - set up a new plot
 # - define a new chain or likelihood function
 # - get 1D stats for a parameter
 # - add some combination of constraints to a subplot (if plot exists)
 # - change plot appearance (labels, font size, etc.) (if plot exists)
-# - save the current script and exit (verify name to use first)
+# - save the current log file and exit (verify name to use first)
 options = (('Set up new joint constraint', 
             {'action': session.set_up_pdf, 
              'condition': lambda: True}),
