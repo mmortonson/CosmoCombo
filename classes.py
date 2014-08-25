@@ -12,19 +12,24 @@ import utils
 
 class Session(object):
 
-    def __init__(self, name, path=None):
+    def __init__(self, name, path=None, save_log=True):
         self.settings = Settings()
         self.history_file = '.session_history'
         self.name = name
+        self.path = path
+        self.save_log = save_log
         self.plot = None
         self.pdfs = []
-        # if path is given, search it for the named script (error if not found)
+        # if path is given, search it for the named log (error if not found)
 
-        # if no path given, search multiple paths for named script
+        # if no path given, search multiple paths for named log file
 
-        # if existing script found, set up environment using old settings
+        # if existing log found, set up environment using old settings
 
-        # if script not found, notify that new script is assumed
+        # if not found, notify that new log file is assumed
+
+        if self.save_log:
+            print 'Session name:', self.name
 
         # check for file with inputs from all previous sessions
         # (e.g. chains, likelihoods, joint pdfs) and load it
@@ -49,7 +54,6 @@ class Session(object):
         history_writer.close()
 
     def start_interactive(self, options=None):
-        print 'Session name:', self.name
         menu = Menu()
         menu.get_choice(options=self.active_options(options))
         while menu.choice != menu.exit:
@@ -101,8 +105,6 @@ class Session(object):
         # or get files and name for new chain (if new, save to file)
         if pdf is not None:
             if len(self.history['chains']) > 0:
-                #options = [ch[0] + ' (' + ', '.join(ch[1]) + ')' for \
-                #               ch in self.history['chains']]
                 options = [ch[0] for ch in self.history['chains']]
                 details = ['Chains:\n' + '\n'.join(
                         [textwrap.fill(s, initial_indent='    ',

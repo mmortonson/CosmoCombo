@@ -13,15 +13,19 @@ parser.add_argument('-l', '--log',
                     help='name of new or existing session log file')
 parser.add_argument('-d', '--dir',
                     help='directory to search for existing log file')
+parser.add_argument('--no_log', action='store_true', 
+                    help='run session without recording a new log file')
 args = parser.parse_args()
 
 if args.log:
     if args.dir:
-        session = classes.Session(args.log, path=args.dir)
+        session = classes.Session(args.log, path=args.dir, 
+                                  save_log=not args.no_log)
     else:
-        session = classes.Session(args.log)
+        session = classes.Session(args.log, save_log=not args.no_log)
 else:
-    session = classes.Session('session.' + current_time + '.log')
+    session = classes.Session('session.' + current_time + '.log',
+                              save_log=not args.no_log)
 
 # - set up a new plot
 # - define a new chain or likelihood function
