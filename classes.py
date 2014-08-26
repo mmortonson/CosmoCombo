@@ -14,7 +14,7 @@ import utils
 class Session(object):
 
     def __init__(self, name, path=None, save_log=True):
-        self.settings = Settings()
+        self.settings = {}
         self.history_file = '.session_history'
         self.name = name
         self.save_log = save_log
@@ -23,19 +23,22 @@ class Session(object):
                                          name)
         self.plot = None
         self.pdfs = []
+
+        for attr in ['name', 'log_file']:
+            self.settings[attr] = getattr(self, attr)
+        self.settings['pdfs'] = {}
+
         log_reader = None
         # if path is given, search it for the named log (error if not found)
         if path:
-            log_reader = utils.open_if_exists(os.path.join(path, name), 'r')
+            log_reader = utils.open_if_exists(os.path.join(path, name), 'rb')
         # if no path given, search multiple paths for named log file
         else:
             log_paths = os.listdir('Logs')
             for x in log_paths:
                 p = os.path.join('Logs', x)
-                if os.path.isdir(p):
-                    print os.path.join(p, name)
                 if os.path.isdir(p) and os.path.isfile(os.path.join(p, name)):
-                    log_reader = open(os.path.join(p, name), 'r')
+                    log_reader = open(os.path.join(p, name), 'rb')
         # if existing log found, set up environment using old settings
         if log_reader:
             self.load_log(log_reader)
@@ -49,9 +52,28 @@ class Session(object):
         self.load_history()
 
     def load_log(self, reader):
-        # read from file and fill self.settings
-
+        log_settings = json.loads(reader.read())
         reader.close()
+        for pdf in log_settings['pdfs']:
+            d = log_settings['pdfs'][pdf]
+            self.set_up_pdf(name=d['name'], model=d['model'])
+            if d['chain_name']:
+                self.choose_pdf(name=d['name']).add_chain(d['chain_name'],
+                                                          d['chain_files'])
+        # add likelihoods
+
+        if log_settings['plot']:
+            d = log_settings['plot']
+            self.set_up_plot((d['n_rows'], d['n_cols']))
+            for row in range(d['n_rows']):
+                for col in range(d['n_cols']):
+                    ax_settings = d['{0:d}.{1:d}'.format(row, col)]
+                    if ax_settings['pdfs']:
+                        for pdf in ax_settings['pdfs']:
+                            self.plot_constraint(row=row, col=col,
+                                                 pdf=self.choose_pdf(pdf),
+                                                 parameters=ax_settings \
+                                                     ['parameters'])
 
     def load_history(self):
         if os.path.isfile(self.history_file):
@@ -63,10 +85,10 @@ class Session(object):
     def save_and_exit(self):
         # save settings
         if self.save_log:
-            writer = utils.open_with_path(self.log_file, 'w')
-            # write settings to log file
-
+            writer = utils.open_with_path(self.log_file, 'wb')
+            writer.write(json.dumps(self.settings, sort_keys=True, indent=4))
             writer.close()
+            print '\nLog file saved as ' + self.log_file
 
         # save history
         history_writer = utils.open_with_path(self.history_file, 'w')
@@ -92,31 +114,57 @@ class Session(object):
                     options.append(key)
         return options
 
-    def set_up_pdf(self):
-        name = raw_input('\nLabel for constraint?\n> ')
-        model = raw_input('Model?\n> ')
-        self.pdfs += [PostPDF(name, model)]
+    def set_up_pdf(self, name=None, model=None):
+        if name:
+            print '\nConstraint name: ' + str(name)
+        else:
+            name = raw_input('\nLabel for constraint?\n> ')
+        if model:
+            print 'Model name: ' + str(model)
+        else:
+            model = raw_input('Model?\n> ')
+        new_pdf = PostPDF(name, model)
+        self.pdfs += [new_pdf]
+        self.settings['pdfs'][name] = new_pdf.settings
 
-    def choose_pdf(self, require_data=False, require_no_chain=False):
+    def choose_pdf(self, name=None, 
+                   require_data=False, require_no_chain=False):
+        chosen_pdf = None
         pdfs = list(self.pdfs)
         for pdf in pdfs:
+            if name and pdf.name == name:
+                chosen_pdf = pdf
             if (require_no_chain and pdf.chain) or \
                     (require_data and (pdf.chain is None) and \
                          len(pdf.likelihoods) == 0):
                 pdfs.remove(pdf)
-        m = Menu(options=[pdf.name for pdf in pdfs], exit_str='Cancel',
-                 header='Choose a constraint:')
-        m.get_choice()
-        if m.choice == m.exit:
-            return None
-        else:
-            return pdfs[m.i_choice]
+        if not chosen_pdf:
+            m = Menu(options=[pdf.name for pdf in pdfs], exit_str='Cancel',
+                     header='Choose a constraint:')
+            m.get_choice()
+            if m.choice != m.exit:
+                chosen_pdf = pdfs[m.i_choice]
+        return chosen_pdf
 
     def rename_pdf(self):
         pdf = self.choose_pdf()
         if pdf is not None:
+            old_name = pdf.name
             new_name = raw_input('\nNew name?\n> ')
             pdf.rename(new_name)
+            set_pdfs = self.settings['pdfs']
+            if old_name in set_pdfs:
+                set_pdfs[new_name] = set_pdfs[old_name]
+                del set_pdfs[old_name]
+            if self.plot:
+                for ax_row in self.plot.axes:
+                    for ax in ax_row:
+                        subplot_pdfs = self.plot.settings \
+                            ['{0:d}.{1:d}'.format(ax.row, ax.col)] \
+                            ['pdfs']
+                        if old_name in subplot_pdfs:
+                            subplot_pdfs[new_name] = subplot_pdfs[old_name]
+                            del subplot_pdfs[old_name]
 
     def add_chain(self):
         pdf = self.choose_pdf(require_no_chain=True)
@@ -181,47 +229,57 @@ class Session(object):
             parameters = self.choose_parameters(pdf)
             pdf.compute_1d_stats(parameters)
 
-    def set_up_plot(self):
-        n_rows = self.get_input_integer('\nNumber of subplot rows?\n> ',
-            error_text='Number of rows must be an integer > 0.')
-        n_cols = self.get_input_integer('Number of subplot columns?\n> ',
-            error_text='Number of columns must be an integer > 0.')
+    def set_up_plot(self, size=None):
+        if size:
+            n_rows = size[0]
+            n_cols = size[1]
+            print '\nSetting up {0:d}x{1:d} plot.'.format(n_rows, n_cols)
+        else:
+            e_str = 'Number of {0:s} must be an integer > 0.'
+            n_rows = self.get_input_integer('\nNumber of subplot rows?\n> ',
+                                            error_text=e_str.format('rows'))
+            n_cols = self.get_input_integer('Number of subplot columns?\n> ',
+                                            error_text=e_str.format('columns'))
         if n_rows < 1 or n_cols < 1:
             print 'Must have > 0 rows and columns.'
             self.set_up_plot()
         self.plot = Plot()
+        self.settings['plot'] = self.plot.settings
         self.plot.set_up_plot_grid(n_rows, n_cols)
         plt.show(block=False)
         print '(If you cannot see the plot, try changing the '
         print 'matplotlib backend. Current backend is ' + \
             plt.get_backend() + '.)'
 
-    def plot_constraint(self):
-        pdf = self.choose_pdf(require_data=True)
+    def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
+        if pdf is None:
+            pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
             # get row and column of subplot
-            n_rows = self.plot.n_rows
-            n_cols = self.plot.n_cols
-            if n_rows > 1:
-                row = self.get_input_integer( \
-                    '\nSubplot row (0-' + str(self.plot.n_rows - 1) + ')?\n> ',
-                    error_text='Must choose an integer.')
-            else:
-                row = 0
-            if n_cols > 1:
-                col = self.get_input_integer( \
-                    '\nSubplot column (0-' + str(str(self.plot.n_cols - 1)) + \
-                        ')?\n> ',
-                    error_text='Must choose an integer.')
-            else:
-                col = 0
-            if row < 0 or row > self.plot.n_rows - 1 or \
-                    col < 0 or col > self.plot.n_cols - 1:
+            n_rows = self.plot.settings['n_rows']
+            n_cols = self.plot.settings['n_cols']
+            if row is None:
+                if n_rows > 1:
+                    row = self.get_input_integer( \
+                        '\nSubplot row (0-' + str(n_rows - 1) + ')?\n> ',
+                        error_text='Must choose an integer.')
+                else:
+                    row = 0
+            if col is None:
+                if n_cols > 1:
+                    col = self.get_input_integer( \
+                        '\nSubplot column (0-' + str(str(n_cols - 1)) + \
+                            ')?\n> ',
+                        error_text='Must choose an integer.')
+                else:
+                    col = 0
+            if row < 0 or row > n_rows - 1 or \
+                    col < 0 or col > n_cols - 1:
                 print 'Row or column number is out of required range.'
                 self.plot_constraint()
             ax = self.plot.axes[row][col]
             if len(ax.pdfs) == 0:
-                self.set_up_subplot(row, col, pdf)
+                self.set_up_subplot(row, col, pdf, parameters)
             n_dim = len(ax.parameters)
             if n_dim == 1:
                 self.plot.plot_1d_pdf(ax, pdf)
@@ -229,12 +287,17 @@ class Session(object):
                 self.plot.plot_2d_pdf(ax, pdf)
             plt.draw()
 
-    def set_up_subplot(self, row, col, pdf):
+    def set_up_subplot(self, row, col, pdf, parameters):
         ax = self.plot.axes[row][col]
-        ax.parameters = self.choose_parameters(pdf)
+        if parameters is None:
+            ax.parameters = self.choose_parameters(pdf)
+        else:
+            ax.parameters = parameters
         if len(ax.parameters) > 2:
             print 'Number of parameters must be 1 or 2.'
-            self.set_up_subplot(row, col)
+            self.set_up_subplot(row, col, pdf, parameters)
+        self.plot.settings['{0:d}.{1:d}'.format(row, col)]['parameters'] = \
+            ax.parameters
 
     def pdf_exists(self):
         if len(self.pdfs) > 0:
@@ -282,11 +345,6 @@ class Session(object):
             else:
                sys.exit(error_text)
         return value
-
-class Settings(object):
-
-    def __init__(self):
-        pass
 
 
 class Menu(object):
@@ -347,15 +405,14 @@ class Menu(object):
 class Plot(object):
 
     def __init__(self):
-        self.n_rows = 1
-        self.n_cols = 1
+        self.settings = {'n_rows': 1, 'n_cols': 1}
 
     def set_up_plot_grid(self, n_rows, n_cols):
         # assume all subplots occupy a single row and column for now
         # (also possible to use gridspec for plots that span multiple
         #  rows/columns - see http://matplotlib.org/users/gridspec.html)
-        self.n_rows = n_rows
-        self.n_cols = n_cols
+        self.settings['n_rows'] = n_rows
+        self.settings['n_cols'] = n_cols
         self.plot_grid = matplotlib.gridspec.GridSpec(n_rows, n_cols)
         self.axes = []
         for i in range(n_rows):
@@ -363,11 +420,18 @@ class Plot(object):
             for j in range(n_cols):
                 row.append(plt.subplot(self.plot_grid[i, j]))
             self.axes.append(row)
-        for ax_row in self.axes:
-            for ax in ax_row:
+        for i, ax_row in enumerate(self.axes):
+            for j, ax in enumerate(ax_row):
+                ax.row = i
+                ax.col = j
                 ax.pdfs = []
+                self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)] = \
+                    {'pdfs': {}}
 
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
+        ax.pdfs += [pdf]
+        self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)] \
+            ['pdfs'][pdf.name] = {}
         parameter = pdf.get_chain_parameter(ax.parameters[0])
         bin_width = parameter.standard_deviation() / float(bins_per_sigma)
         number_of_bins = (parameter.values.max()-parameter.values.min())/ \
@@ -386,23 +450,33 @@ class Plot(object):
         ax.plot(bin_centers, pdf_1d)
 
     def plot_2d_pdf(self, ax, pdf):
+        ax.pdfs += [pdf]
+        self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)] \
+            ['pdfs'][pdf.name] = {}
         pass
 
 
 class PostPDF(object):
 
     def __init__(self, name, model):
+        self.settings = {}
         self.rename(name)
         self.model = model
         self.parameters = []
         self.chain = None
+        self.chain_files = []
         self.likelihoods = []
+        for attr in ['name', 'model', 'parameters', 
+                     'chain_files', 'likelihoods']:
+            self.settings[attr] = getattr(self, attr)
 
     def add_chain(self, name, files):
         # check if already have chain, if files exist, if name is unique
 
         # check if model is consistent?
 
+        self.chain_files.extend(files)
+        self.settings['chain_name'] = name
         self.chain = MCMCChain(name, files)
         self.add_parameters(self.chain.parameters)
 
