@@ -448,6 +448,9 @@ class Plot(object):
             pdf_1d = np.delete(pdf_1d, -1)
             bin_centers = np.delete(bin_centers, -1)
         ax.plot(bin_centers, pdf_1d)
+        if not ax.get_xlabel():
+            ax.set_xlabel(ax.parameters[0])
+            ax.set_ylabel('P(' + ax.parameters[0] + ')')
 
     def plot_2d_pdf(self, ax, pdf):
         ax.pdfs += [pdf]
