@@ -251,32 +251,55 @@ class Session(object):
         print 'matplotlib backend. Current backend is ' + \
             plt.get_backend() + '.)'
 
+    # merge with get_col function?
+    def get_row(self, default=None):
+        n_rows = self.plot.settings['n_rows']
+        if default is None:
+            if n_rows > 1:
+                row = self.get_input_integer( \
+                    '\nSubplot row (0-' + str(n_rows - 1) + ')?\n> ',
+                    error_text='Must choose an integer.')
+            else:
+                row = 0
+        else:
+            row = default
+        if row < 0 or row > n_rows - 1:
+            print 'Row number is out of required range.'
+            row = self.get_row()
+        return row
+
+    def get_col(self, default=None):
+        n_cols = self.plot.settings['n_cols']
+        if default is None:
+            if n_cols > 1:
+                col = self.get_input_integer( \
+                    '\nSubplot column (0-' + str(n_cols - 1) + ')?\n> ',
+                    error_text='Must choose an integer.')
+            else:
+                col = 0
+        else:
+            col = default
+        if col < 0 or col > n_cols - 1:
+            print 'Column number is out of required range.'
+            col = self.get_col()
+        return col
+
+    def change_plot(self):
+        # change to menu of options
+        row = self.get_row()
+        col = self.get_col()
+        ax = self.plot.axes[row][col]
+        # write Plot method to do this and also save new labels to settings?
+        ax.set_xlabel(raw_input('New x-axis label?\n> '))
+        ax.set_ylabel(raw_input('New y-axis label?\n> '))
+        plt.draw()
+
     def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
         if pdf is None:
             pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
-            # get row and column of subplot
-            n_rows = self.plot.settings['n_rows']
-            n_cols = self.plot.settings['n_cols']
-            if row is None:
-                if n_rows > 1:
-                    row = self.get_input_integer( \
-                        '\nSubplot row (0-' + str(n_rows - 1) + ')?\n> ',
-                        error_text='Must choose an integer.')
-                else:
-                    row = 0
-            if col is None:
-                if n_cols > 1:
-                    col = self.get_input_integer( \
-                        '\nSubplot column (0-' + str(str(n_cols - 1)) + \
-                            ')?\n> ',
-                        error_text='Must choose an integer.')
-                else:
-                    col = 0
-            if row < 0 or row > n_rows - 1 or \
-                    col < 0 or col > n_cols - 1:
-                print 'Row or column number is out of required range.'
-                self.plot_constraint()
+            row = self.get_row(default=row)
+            col = self.get_col(default=col)
             ax = self.plot.axes[row][col]
             if len(ax.pdfs) == 0:
                 self.set_up_subplot(row, col, pdf, parameters)

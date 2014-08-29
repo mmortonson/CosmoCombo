@@ -50,7 +50,10 @@ options = (('Set up new joint constraint',
              'condition': lambda: not session.plot_exists()}),
            ('Plot constraint', 
             {'action': session.plot_constraint, 
-             'condition': session.plot_and_pdf_with_data_exist}))
+             'condition': session.plot_and_pdf_with_data_exist}),
+           ('Change plot appearance',
+            {'action': session.change_plot,
+             'condition': session.plot_exists}))
 
 session.start_interactive(options=OrderedDict(options))
 
