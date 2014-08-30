@@ -68,12 +68,20 @@ class Session(object):
             for row in range(d['n_rows']):
                 for col in range(d['n_cols']):
                     ax_settings = d['{0:d}.{1:d}'.format(row, col)]
-                    if ax_settings['pdfs']:
+                    if 'pdfs' in ax_settings:
                         for pdf in ax_settings['pdfs']:
                             self.plot_constraint(row=row, col=col,
                                                  pdf=self.choose_pdf(pdf),
                                                  parameters=ax_settings \
                                                      ['parameters'])
+                    xlabel = ''
+                    ylabel = ''
+                    if 'xlabel' in ax_settings:
+                        print 'xlabel'
+                        xlabel = ax_settings['xlabel']
+                    if 'ylabel' in ax_settings:
+                        ylabel = ax_settings['ylabel']
+                    self.plot.label_axes(row, col, xlabel=xlabel, ylabel=ylabel)
 
     def load_history(self):
         if os.path.isfile(self.history_file):
@@ -288,10 +296,7 @@ class Session(object):
         # change to menu of options
         row = self.get_row()
         col = self.get_col()
-        ax = self.plot.axes[row][col]
-        # write Plot method to do this and also save new labels to settings?
-        ax.set_xlabel(raw_input('New x-axis label?\n> '))
-        ax.set_ylabel(raw_input('New y-axis label?\n> '))
+        self.plot.label_axes(row, col)
         plt.draw()
 
     def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
@@ -448,8 +453,20 @@ class Plot(object):
                 ax.row = i
                 ax.col = j
                 ax.pdfs = []
-                self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)] = \
-                    {'pdfs': {}}
+                row_col_str = '{0:d}.{1:d}'.format(ax.row, ax.col)
+                if row_col_str not in self.settings:
+                    self.settings[row_col_str] = {'pdfs': {}}
+
+    def label_axes(self, row, col, xlabel=None, ylabel=None):
+        ax = self.axes[row][col]
+        if xlabel is None:
+            xlabel = raw_input('New x-axis label?\n> ')
+        ax.set_xlabel(xlabel)
+        self.settings['{0:d}.{1:d}'.format(row, col)]['xlabel'] = xlabel
+        if ylabel is None:
+            ylabel = raw_input('New y-axis label?\n> ')
+        ax.set_ylabel(ylabel)
+        self.settings['{0:d}.{1:d}'.format(row, col)]['ylabel'] = ylabel
 
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
         ax.pdfs += [pdf]
@@ -473,6 +490,7 @@ class Plot(object):
         ax.plot(bin_centers, pdf_1d)
         if not ax.get_xlabel():
             ax.set_xlabel(ax.parameters[0])
+        if not ax.get_ylabel():
             ax.set_ylabel('P(' + ax.parameters[0] + ')')
 
     def plot_2d_pdf(self, ax, pdf):
