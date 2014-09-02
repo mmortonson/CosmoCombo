@@ -83,11 +83,11 @@ class Session(object):
                     xlabel = ''
                     ylabel = ''
                     if 'xlabel' in ax_settings:
-                        print 'xlabel'
                         xlabel = ax_settings['xlabel']
                     if 'ylabel' in ax_settings:
                         ylabel = ax_settings['ylabel']
                     self.plot.label_axes(row, col, xlabel=xlabel, ylabel=ylabel)
+            plt.draw()
 
     def load_history(self):
         if os.path.isfile(self.history_file):
@@ -467,10 +467,12 @@ class Plot(object):
         ax = self.axes[row][col]
         if xlabel is None:
             xlabel = raw_input('New x-axis label?\n> ')
+        print 'Changing x label to ' + xlabel
         ax.set_xlabel(xlabel)
         self.settings['{0:d}.{1:d}'.format(row, col)]['xlabel'] = xlabel
         if ylabel is None:
             ylabel = raw_input('New y-axis label?\n> ')
+        print 'Changing y label to ' + ylabel
         ax.set_ylabel(ylabel)
         self.settings['{0:d}.{1:d}'.format(row, col)]['ylabel'] = ylabel
 
@@ -494,10 +496,10 @@ class Plot(object):
             pdf_1d = np.delete(pdf_1d, -1)
             bin_centers = np.delete(bin_centers, -1)
         ax.plot(bin_centers, pdf_1d)
-        if not ax.get_xlabel():
-            ax.set_xlabel(ax.parameters[0])
-        if not ax.get_ylabel():
-            ax.set_ylabel('P(' + ax.parameters[0] + ')')
+        if not ax.get_xlabel() and not ax.get_ylabel():
+            self.label_axes(ax.row, ax.col, 
+                            xlabel=ax.parameters[0],
+                            ylabel='P(' + ax.parameters[0] + ')')
 
     def plot_2d_pdf(self, ax, pdf):
         ax.pdfs += [pdf]
