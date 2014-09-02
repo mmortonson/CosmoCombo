@@ -5,6 +5,7 @@ import glob
 import json
 import textwrap
 import numpy as np
+from sympy import symbols, sympify, lambdify
 import matplotlib
 matplotlib.use('GTKAgg')
 import matplotlib.pyplot as plt
@@ -60,12 +61,18 @@ class Session(object):
     def load_log(self, reader):
         log_settings = json.loads(reader.read())
         reader.close()
-        for pdf in log_settings['pdfs']:
-            d = log_settings['pdfs'][pdf]
+        for pdf_name in log_settings['pdfs']:
+            d = log_settings['pdfs'][pdf_name]
             self.set_up_pdf(name=d['name'], model=d['model'])
-            if d['chain_name']:
-                self.choose_pdf(name=d['name']).add_chain(d['chain_name'],
-                                                          d['chain_files'])
+            pdf = self.choose_pdf(name=d['name'])
+            if 'chain_name' in d:
+                pdf.add_chain(d['chain_name'], d['chain_files'])
+            for p in d['derived_parameters']:
+                p_dict = d['derived_parameters'][p]
+                pdf.add_derived_parameter(p, p_dict['function'],
+                                          p_dict['parameters'],
+                                          p_dict['indices'])
+
         # add likelihoods
 
         if log_settings['plot']:
@@ -145,10 +152,10 @@ class Session(object):
                    require_data=False, require_no_chain=False):
         chosen_pdf = None
         pdfs = list(self.pdfs)
-        for pdf in pdfs:
+        for pdf in list(pdfs):
             if name and pdf.name == name:
                 chosen_pdf = pdf
-            if (require_no_chain and pdf.chain) or \
+            if (require_no_chain and (pdf.chain is not None)) or \
                     (require_data and (pdf.chain is None) and \
                          len(pdf.likelihoods) == 0):
                 pdfs.remove(pdf)
@@ -212,7 +219,7 @@ class Session(object):
             files += glob.glob(f)
         name = raw_input('Label for chain?\n> ')
         # check if name is already in history; if so, replace with new
-        for chain in self.history['chains']:
+        for chain in list(self.history['chains']):
             if chain[0] == name:
                 self.history['chains'].remove(chain)
         self.history['chains'].append((name, files))
@@ -236,6 +243,23 @@ class Session(object):
                 print ', '.join(extra_parameters)
                 parameters = self.choose_parameters(pdf)
         return parameters
+
+    def add_derived_parameter(self):
+        # how does this work with likelihoods without a chain?
+        # add option to add parameter to all chains?
+        pdf = self.choose_pdf(require_data=True)
+        if pdf is not None:
+            name = raw_input('\nName of the new parameter?\n> ')
+            # check that this is a new name
+
+            par_names = raw_input('\nExisting parameters required to ' + \
+                                      'compute the new parameter?\n' + \
+                                      '(all on one line, separated ' + \
+                                      'by spaces)\n> ').split()
+            f_str = raw_input('\nEnter the function to use for the new ' + \
+                                  'parameter,\nusing the existing ' + \
+                                  'parameter names and standard functions:\n> ')
+            pdf.add_derived_parameter(name, f_str, par_names)
 
     def compute_1d_stats(self):
         pdf = self.choose_pdf(require_data=True)
@@ -467,12 +491,10 @@ class Plot(object):
         ax = self.axes[row][col]
         if xlabel is None:
             xlabel = raw_input('New x-axis label?\n> ')
-        print 'Changing x label to ' + xlabel
         ax.set_xlabel(xlabel)
         self.settings['{0:d}.{1:d}'.format(row, col)]['xlabel'] = xlabel
         if ylabel is None:
             ylabel = raw_input('New y-axis label?\n> ')
-        print 'Changing y label to ' + ylabel
         ax.set_ylabel(ylabel)
         self.settings['{0:d}.{1:d}'.format(row, col)]['ylabel'] = ylabel
 
@@ -521,6 +543,7 @@ class PostPDF(object):
         for attr in ['name', 'model', 'parameters', 
                      'chain_files', 'likelihoods']:
             self.settings[attr] = getattr(self, attr)
+        self.settings['derived_parameters'] = {}
 
     def add_chain(self, name, files):
         # check if already have chain, if files exist, if name is unique
@@ -549,6 +572,38 @@ class PostPDF(object):
         # create a ChainParameter object for each parameter
         return ChainParameter(self.chain, index)
 
+    def add_derived_parameter(self, new_name, f_str, par_names, 
+                              par_indices=None):
+        # only works for simple parameter combinations - what about
+        # more complicated functions like D_A(z)?
+        f = lambdify(symbols([str(x) for x in par_names]), 
+                     sympify(f_str), 'numpy')
+        # handle errors from the sympy operations
+
+        if par_indices is None:
+            par_indices = []
+            for name in par_names:
+                index = np.where(np.array(self.chain.parameters) == name)[0]
+                if len(index) == 0:
+                    print 'Parameter ' + str(name) + ' not found in chain.'
+                    print 'Use the name of an existing parameter or ' + \
+                        'supply a list of chain indices.'
+                else:
+                    par_indices.append(index[0])
+        if len(par_indices) == len(par_names):
+            self.parameters.append(new_name)
+            self.chain.parameters.append(new_name)
+            self.chain.column_names.append(new_name)
+            new_column = f(\
+                *[self.chain.samples[:, i+self.chain.first_par_column] \
+                      for i in par_indices])
+            self.chain.samples = np.hstack((self.chain.samples, 
+                                      np.array([new_column]).T))
+            self.settings['derived_parameters'][new_name] = {
+                'function': f_str,
+                'parameters': par_names,
+                'indices': par_indices}
+
     def compute_1d_stats(self, parameters):
         # how to do this if there is no chain, only likelihoods?
 
@@ -571,7 +626,9 @@ class MCMCChain(object):
         self.rename(name)
         first_file = True
         for chain_file in chain_files:
+            # does this raise an error if the file doesn't exist???
             reader = utils.open_if_exists(chain_file, 'r')
+
             new_samples = np.loadtxt(reader)
             reader.close()
             if first_file:
@@ -694,27 +751,5 @@ class ChainParameter(object):
     def fraction_greater_than(self, value):
         return 1.-self.fraction_less_than(value)
 
-    """
-    def pdf_1d(self, bins_per_sigma, p_min_frac=0.01):
-        bin_width = self.standard_deviation() / float(bins_per_sigma)
-        number_of_bins = (self.values.max()-self.values.min())/ \
-                             bin_width
-        pdf, bin_edges = np.histogram(self.values, bins=number_of_bins,\
-                                          weights=self.chain.multiplicity, \
-                                          density=True)
-        bin_centers = 0.5*(bin_edges[:-1] + bin_edges[1:])
-        # trim bins at either end with prob./max(pdf) < p_min_frac
-        while pdf[0] < p_min_frac*pdf.max():
-            pdf = np.delete(pdf, 0)
-            bin_centers = np.delete(bin_centers, 0)
-        while pdf[-1] < p_min_frac*pdf.max():
-            pdf = np.delete(pdf, -1)
-            bin_centers = np.delete(bin_centers, -1)
-        return (bin_centers, pdf)
-    """
 
-class DerivedParameter(ChainParameter):
-# use supplied function to combine columns from the chain
-    def __init__(self):
-        pass
 
