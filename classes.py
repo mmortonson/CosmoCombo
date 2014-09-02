@@ -31,16 +31,22 @@ class Session(object):
         log_reader = None
         # if path is given, search it for the named log (error if not found)
         if path:
-            log_reader = utils.open_if_exists(os.path.join(path, name), 'rb')
+            old_log_file = os.path.join(path, name)
+            log_reader = utils.open_if_exists(old_log_file, 'rb')
         # if no path given, search multiple paths for named log file
+        # (sort date directories in reverse order so newest 
+        #  log files are found first)
         else:
-            log_paths = os.listdir('Logs')
+            log_paths = sorted(os.listdir('Logs'), reverse=True)
             for x in log_paths:
                 p = os.path.join('Logs', x)
-                if os.path.isdir(p) and os.path.isfile(os.path.join(p, name)):
-                    log_reader = open(os.path.join(p, name), 'rb')
+                old_log_file = os.path.join(p, name)
+                if os.path.isdir(p) and os.path.isfile(old_log_file):
+                    log_reader = open(old_log_file, 'rb')
+                    break
         # if existing log found, set up environment using old settings
         if log_reader:
+            print 'Using settings from ' + old_log_file
             self.load_log(log_reader)
         # if not found, notify that new log file is assumed
         elif self.save_log:
