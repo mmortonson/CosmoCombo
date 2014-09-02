@@ -176,6 +176,7 @@ class Session(object):
             set_pdfs = self.settings['pdfs']
             if old_name in set_pdfs:
                 set_pdfs[new_name] = set_pdfs[old_name]
+                set_pdfs[new_name]['name'] = new_name
                 del set_pdfs[old_name]
             if self.plot:
                 for ax_row in self.plot.axes:
@@ -490,12 +491,20 @@ class Plot(object):
     def label_axes(self, row, col, xlabel=None, ylabel=None):
         ax = self.axes[row][col]
         if xlabel is None:
-            xlabel = raw_input('New x-axis label?\n> ')
-        ax.set_xlabel(xlabel)
+            new_label = raw_input('New x-axis label? (Press Enter to ' + \
+                                      'keep the current label.)\n> ')
+            if len(new_label) > 0:
+                xlabel = new_label
+        if xlabel is not None:
+            ax.set_xlabel(xlabel)
         self.settings['{0:d}.{1:d}'.format(row, col)]['xlabel'] = xlabel
         if ylabel is None:
-            ylabel = raw_input('New y-axis label?\n> ')
-        ax.set_ylabel(ylabel)
+            new_label = raw_input('New y-axis label? (Press Enter to ' + \
+                                      'keep the current label.)\n> ')
+            if len(new_label) > 0:
+                ylabel = new_label
+        if ylabel is not None:
+            ax.set_ylabel(ylabel)
         self.settings['{0:d}.{1:d}'.format(row, col)]['ylabel'] = ylabel
 
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
