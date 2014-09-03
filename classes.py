@@ -5,6 +5,7 @@ import glob
 import json
 import textwrap
 import numpy as np
+from scipy import stats
 from sympy import symbols, sympify, lambdify
 import matplotlib
 matplotlib.use('GTKAgg')
@@ -64,6 +65,7 @@ class Session(object):
         for pdf_name in log_settings['pdfs']:
             d = log_settings['pdfs'][pdf_name]
             self.set_up_pdf(name=d['name'], model=d['model'])
+            # better?: self.set_up_pdf(settings=d)
             pdf = self.choose_pdf(name=d['name'])
             if 'chain_name' in d:
                 pdf.add_chain(d['chain_name'], d['chain_files'])
@@ -72,10 +74,14 @@ class Session(object):
                 pdf.add_derived_parameter(p, p_dict['function'],
                                           p_dict['parameters'],
                                           p_dict['indices'])
+            if 'contour_data_files' in d:
+                pdf.settings['contour_data_files'] = d['contour_data_files']
+            if ('color' in d) and (d['color'] is not None):
+                pdf.settings['color'] = tuple(d['color'])
 
         # add likelihoods
 
-        if log_settings['plot']:
+        if 'plot' in log_settings:
             d = log_settings['plot']
             self.set_up_plot((d['n_rows'], d['n_cols']))
             for row in range(d['n_rows']):
@@ -275,10 +281,11 @@ class Session(object):
             print '\nSetting up {0:d}x{1:d} plot.'.format(n_rows, n_cols)
         else:
             e_str = 'Number of {0:s} must be an integer > 0.'
-            n_rows = self.get_input_integer('\nNumber of subplot rows?\n> ',
-                                            error_text=e_str.format('rows'))
-            n_cols = self.get_input_integer('Number of subplot columns?\n> ',
-                                            error_text=e_str.format('columns'))
+            n_rows = utils.get_input_integer('\nNumber of subplot rows?\n> ',
+                                             error_text=e_str.format('rows'))[0]
+            n_cols = utils.get_input_integer('Number of subplot columns?\n> ',
+                                             error_text= \
+                                                 e_str.format('columns'))[0]
         if n_rows < 1 or n_cols < 1:
             print 'Must have > 0 rows and columns.'
             self.set_up_plot()
@@ -295,9 +302,9 @@ class Session(object):
         n_rows = self.plot.settings['n_rows']
         if default is None:
             if n_rows > 1:
-                row = self.get_input_integer( \
+                row = utils.get_input_integer( \
                     '\nSubplot row (0-' + str(n_rows - 1) + ')?\n> ',
-                    error_text='Must choose an integer.')
+                    error_text='Must choose an integer.')[0]
             else:
                 row = 0
         else:
@@ -311,9 +318,9 @@ class Session(object):
         n_cols = self.plot.settings['n_cols']
         if default is None:
             if n_cols > 1:
-                col = self.get_input_integer( \
+                col = utils.get_input_integer( \
                     '\nSubplot column (0-' + str(n_cols - 1) + ')?\n> ',
-                    error_text='Must choose an integer.')
+                    error_text='Must choose an integer.')[0]
             else:
                 col = 0
         else:
@@ -339,6 +346,8 @@ class Session(object):
             ax = self.plot.axes[row][col]
             if len(ax.pdfs) == 0:
                 self.set_up_subplot(row, col, pdf, parameters)
+            if pdf.settings['color'] is None:
+                pdf.set_color()
             n_dim = len(ax.parameters)
             if n_dim == 1:
                 self.plot.plot_1d_pdf(ax, pdf)
@@ -389,21 +398,6 @@ class Session(object):
             return True
         else:
             return False
-
-    def get_input_integer(self, prompt, 
-                          error_text='Input must be an integer.',
-                          error_action='retry'):
-        value = 0
-        try:
-            value = int(raw_input(prompt))
-        except ValueError as e:
-            if error_action == 'retry':
-                print error_text
-                value = self.get_input_integer(prompt, error_text=error_text,
-                                               error_action=error_action)
-            else:
-               sys.exit(error_text)
-        return value
 
 
 class Menu(object):
@@ -497,7 +491,7 @@ class Plot(object):
                 xlabel = new_label
         if xlabel is not None:
             ax.set_xlabel(xlabel)
-        self.settings['{0:d}.{1:d}'.format(row, col)]['xlabel'] = xlabel
+            self.settings['{0:d}.{1:d}'.format(row, col)]['xlabel'] = xlabel
         if ylabel is None:
             new_label = raw_input('New y-axis label? (Press Enter to ' + \
                                       'keep the current label.)\n> ')
@@ -505,7 +499,7 @@ class Plot(object):
                 ylabel = new_label
         if ylabel is not None:
             ax.set_ylabel(ylabel)
-        self.settings['{0:d}.{1:d}'.format(row, col)]['ylabel'] = ylabel
+            self.settings['{0:d}.{1:d}'.format(row, col)]['ylabel'] = ylabel
 
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
         ax.pdfs += [pdf]
@@ -532,11 +526,80 @@ class Plot(object):
                             xlabel=ax.parameters[0],
                             ylabel='P(' + ax.parameters[0] + ')')
 
-    def plot_2d_pdf(self, ax, pdf):
+    def plot_2d_pdf(self, ax, pdf, n_samples=5000, grid_size=(100, 100), 
+                    smoothing=1.0, contour_pct=(95.45, 68.27),
+                    colors=None):
         ax.pdfs += [pdf]
-        self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)] \
-            ['pdfs'][pdf.name] = {}
-        pass
+        ax.set_rasterization_zorder(0)
+        set_pdfs = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['pdfs']
+        if pdf.name not in set_pdfs:
+            set_pdfs[pdf.name] = {}
+
+        contour_data = pdf.load_contour_data(n_samples, grid_size, smoothing, 
+                                             contour_pct)
+        if contour_data is None:
+
+            par_x = pdf.get_chain_parameter(ax.parameters[0])
+            par_y = pdf.get_chain_parameter(ax.parameters[1])
+
+            # draw random samples from the chains with probability
+            # proportional to multiplicity weight
+            mult = pdf.chain.multiplicity
+            indices = np.random.choice(len(mult), n_samples,
+                                       p=mult/np.sum(mult))
+            x_samples = par_x.values[indices]
+            y_samples = par_y.values[indices]
+
+            #ax.scatter(x_samples, y_samples)
+
+            # estimate PDF with KDE
+            xy_samples = np.vstack((x_samples, y_samples))
+            kde = stats.gaussian_kde(xy_samples)
+            kde_bw = smoothing * kde.covariance_factor()
+            kde.set_bandwidth(kde_bw)
+            pdf_values = kde(xy_samples)
+
+            # evaluate the PDF on a regular grid
+            x_border = 0.05*(np.max(x_samples) - np.min(x_samples))
+            x_limits = [np.min(x_samples)-x_border, np.max(x_samples)+x_border]
+            y_border = 0.05*(np.max(y_samples) - np.min(y_samples))
+            y_limits = [np.min(y_samples)-y_border, np.max(y_samples)+y_border]
+            x_grid = np.linspace(*x_limits, num=grid_size[0])
+            y_grid = np.linspace(*y_limits, num=grid_size[1])
+            X_2d, Y_2d = np.meshgrid(x_grid, y_grid)
+            xy_grid = np.transpose(np.vstack((X_2d.flatten(), Y_2d.flatten())))
+            pdf_grid = np.array([kde(xy) for xy in xy_grid])
+            Z_2d = np.reshape(pdf_grid, X_2d.shape)
+
+            # compute contour levels
+            contour_levels = []
+            for cl in contour_pct:
+                contour_levels.append(stats.scoreatpercentile(pdf_values, 
+                                                              100.0-cl))
+        
+            pdf.save_contour_data(n_samples, grid_size, smoothing, 
+                                  contour_pct, contour_levels,
+                                  X_2d, Y_2d, Z_2d)
+
+        else:
+            contour_levels, X_2d, Y_2d, Z_2d = contour_data
+
+        # set contour colors
+        if colors is None:
+            if pdf.settings['color'] is None:
+                colors = utils.color_gradient((0, 0, 0), len(contour_pct))
+            else:
+                colors = utils.color_gradient(pdf.settings['color'], 
+                                              len(contour_pct))
+
+        # plot contours
+        ax.contourf(X_2d, Y_2d, Z_2d, levels=sorted(contour_levels)+[np.inf],
+                    colors=colors)
+
+        if not ax.get_xlabel() and not ax.get_ylabel():
+            self.label_axes(ax.row, ax.col, 
+                            xlabel=ax.parameters[0],
+                            ylabel=ax.parameters[1])
 
 
 class PostPDF(object):
@@ -552,6 +615,8 @@ class PostPDF(object):
         for attr in ['name', 'model', 'parameters', 
                      'chain_files', 'likelihoods']:
             self.settings[attr] = getattr(self, attr)
+        self.settings['contour_data_files'] = []
+        self.settings['color'] = None
         self.settings['derived_parameters'] = {}
 
     def add_chain(self, name, files):
@@ -604,7 +669,7 @@ class PostPDF(object):
             self.chain.parameters.append(new_name)
             self.chain.column_names.append(new_name)
             new_column = f(\
-                *[self.chain.samples[:, i+self.chain.first_par_column] \
+                *[self.chain.samples[:,i+self.chain.first_par_column] \
                       for i in par_indices])
             self.chain.samples = np.hstack((self.chain.samples, 
                                       np.array([new_column]).T))
@@ -621,10 +686,65 @@ class PostPDF(object):
             fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
             print fmt_str.format(p, cp.mean(), cp.standard_deviation())
 
+    def save_contour_data(self, n_samples, grid_size, smoothing, 
+                          contour_pct, contour_levels, X, Y, Z):
+        filename = os.path.join('Data', time.strftime('%Y-%m-%d'), 
+                                time.strftime('%Z.%H.%M.%S') + '_contour.txt')
+        writer = utils.open_with_path(filename, 'w')
+        header = str(n_samples) + ' # n_samples\n' + \
+            str(grid_size[0]) + ' ' + str(grid_size[1]) + ' # grid_size\n' + \
+            str(smoothing) + ' # smoothing\n' + \
+            ' '.join([str(cp) for cp in contour_pct]) + ' # contour_pct\n' + \
+            ' '.join([str(cl) for cl in contour_levels]) + \
+                         ' # contour_levels\n'
+        np.savetxt(writer, 
+                   np.vstack((X.flatten(), Y.flatten(), Z.flatten())).T, 
+                   fmt='%.3e', header=header, comments='')
+        writer.close()
+        self.settings['contour_data_files'].append(filename)
+
+    def load_contour_data(self, n_samples, grid_size, smoothing, contour_pct):
+        contour_data = None
+        for f in self.settings['contour_data_files']:
+            reader = utils.open_if_exists(f, 'r')
+            test_n_samples = int(float(reader.readline().split('#')[0]))
+            test_grid_size = [int(float(x)) for x in \
+                                  reader.readline().split('#')[0].split()]
+            test_smoothing = float(reader.readline().split('#')[0])
+            test_contour_pct = [float(x) for x in \
+                                  reader.readline().split('#')[0].split()]
+
+            match = (test_n_samples == n_samples) and \
+                np.all([x == y for x, y in \
+                            zip(test_grid_size, grid_size)]) and \
+                test_smoothing == smoothing and \
+                np.all([x == y for x, y in \
+                            zip(test_contour_pct, contour_pct)])
+
+            if match:
+                contour_levels = [float(x) for x in \
+                                      reader.readline().split('#')[0].split()]
+                X, Y, Z = np.loadtxt(reader, skiprows=1, unpack=True)
+                contour_data = (contour_levels, X.reshape(grid_size),
+                                Y.reshape(grid_size), Z.reshape(grid_size))
+            reader.close()
+        return contour_data
+
     def rename(self, new_name):
         # check that name is unique
 
         self.name = new_name
+
+    def set_color(self, color=None):
+        if color is None:
+            color = utils.get_input_float('\nRGB values for main color?\n' + \
+                                              '(3 numbers between 0 and 1 ' + \
+                                              'separated by spaces)\n> ', 
+                                          num=3)
+        if not np.all([0.<=x<=1. for x in list(color)]):
+            print 'Values must be between 0 and 1.'
+            self.set_color()
+        self.settings['color'] = tuple(color)
 
 
 class MCMCChain(object):

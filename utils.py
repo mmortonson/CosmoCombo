@@ -1,6 +1,8 @@
+import sys
 import os
 import os.path
 import errno
+import numpy as np
 
 def check_path(file):
     """ Check whether a path to a file exists, and if not, create it.
@@ -39,3 +41,59 @@ def open_if_exists(file, flag):
     else:
         sys.exit('File ' + str(file) + ' not found.')
 
+def get_input_integer(prompt, num=1, 
+                      error_text='Input must be integers.',
+                      error_action='retry'):
+    values = []
+    success = True
+    user_input = raw_input(prompt).split()
+    if len(user_input) != num:
+        print 'Expected ' + str(num) + ' numbers.'
+        success = False
+    else:
+        for i in range(num):
+            try:
+                next_value = int(user_input[i])
+                values.append(next_value)
+            except ValueError as e:
+                print error_text
+                success = False
+    if not success:
+        if error_action == 'retry':
+            values = get_input_integer(prompt, num=num, error_text=error_text,
+                                       error_action=error_action)
+        else:
+            sys.exit()
+    return values
+
+def get_input_float(prompt, num=1, 
+                      error_text='Input must be floats.',
+                      error_action='retry'):
+    values = []
+    success = True
+    user_input = raw_input(prompt).split()
+    if len(user_input) != num:
+        print 'Expected ' + str(num) + ' numbers.'
+        success = False
+    else:
+        for i in range(num):
+            try:
+                next_value = float(user_input[i])
+                values.append(next_value)
+            except ValueError as e:
+                print error_text
+                success = False
+    if not success:
+        if error_action == 'retry':
+            values = get_input_float(prompt, num=num, error_text=error_text,
+                                       error_action=error_action)
+        else:
+            sys.exit()
+    return values
+
+def color_gradient(rgb_tuple, num):
+    colors = [rgb_tuple]
+    for i in range(1, num):
+        colors.insert(0, tuple(np.array(rgb_tuple) + \
+                                   i*(1.-np.array(rgb_tuple)) / float(num)))
+    return colors
