@@ -95,6 +95,7 @@ class Session(object):
                                                  pdf=self.choose_pdf(pdf),
                                                  parameters=ax_settings \
                                                      ['parameters'])
+                    """
                     xlabel = ''
                     ylabel = ''
                     if 'xlabel' in ax_settings:
@@ -103,6 +104,7 @@ class Session(object):
                         ylabel = ax_settings['ylabel']
                     self.plot.label_axes(self.plot.axes[row][col], 
                                          xlabel=xlabel, ylabel=ylabel)
+                    """
             plt.draw()
 
     def load_history(self):
@@ -570,8 +572,10 @@ class Plot(object):
 
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
         ax.pdfs[pdf.name] = pdf
-        self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)] \
-            ['pdfs'][pdf.name] = {}
+        ax_settings = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]
+        set_pdfs = ax_settings['pdfs']
+        if pdf.name not in set_pdfs:
+            set_pdfs[pdf.name] = {}
         parameter = pdf.get_chain_parameter(ax.parameters[0])
         bin_width = parameter.standard_deviation() / float(bins_per_sigma)
         number_of_bins = (parameter.values.max()-parameter.values.min())/ \
@@ -588,21 +592,27 @@ class Plot(object):
             pdf_1d = np.delete(pdf_1d, -1)
             bin_centers = np.delete(bin_centers, -1)
         ax.plot(bin_centers, pdf_1d)
-        if not ax.get_xlabel() and not ax.get_ylabel():
-            self.label_axes(ax, 
-                            xlabel=ax.parameters[0],
-                            ylabel='P(' + ax.parameters[0] + ')')
+        if 'xlabel' in ax_settings:
+            xlabel = ax_settings['xlabel']
+        else:
+            xlabel = ax.parameters[0]
+        if 'ylabel' in ax_settings:
+            ylabel = ax_settings['ylabel']
+        else:
+            ylabel = 'P(' + ax.parameters[0] + ')'
+        self.label_axes(ax, xlabel=xlabel, ylabel=ylabel)
 
     # break up into multiple methods and/or separate functions
     def plot_2d_pdf(self, ax, pdf, n_samples=5000, grid_size=(100, 100), 
                     smoothing=1.0, contour_pct=(95.45, 68.27),
                     colors=None, layer=None):
         ax.pdfs[pdf.name] = pdf
-        ax.set_rasterization_zorder(0)
-        set_pdfs = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['pdfs']
+        ax_settings = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]
+        set_pdfs = ax_settings['pdfs']
         if pdf.name not in set_pdfs:
             set_pdfs[pdf.name] = {}
         # plot new contour over others unless a layer is specified
+        ax.set_rasterization_zorder(0)
         if layer is None:
             if 'layer' not in set_pdfs[pdf.name]:
                 for p in set_pdfs:
@@ -677,10 +687,15 @@ class Plot(object):
                     colors=colors, zorder=set_pdfs[pdf.name]['layer'],
                     alpha=0.7, rasterized=True)
 
-        if not ax.get_xlabel() and not ax.get_ylabel():
-            self.label_axes(ax, 
-                            xlabel=ax.parameters[0],
-                            ylabel=ax.parameters[1])
+        if 'xlabel' in ax_settings:
+            xlabel = ax_settings['xlabel']
+        else:
+            xlabel = ax.parameters[0]
+        if 'ylabel' in ax_settings:
+            ylabel = ax_settings['ylabel']
+        else:
+            ylabel = ax.parameters[1]
+        self.label_axes(ax, xlabel=xlabel, ylabel=ylabel)
 
     def change_layer_order(self, ax):
         set_pdfs = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['pdfs']
