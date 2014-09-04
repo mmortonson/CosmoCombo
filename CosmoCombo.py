@@ -20,12 +20,12 @@ args = parser.parse_args()
 if args.log:
     if args.dir:
         session = classes.Session(args.log, path=args.dir, 
-                                  save_log=not args.no_log)
+                                  save=not args.no_log)
     else:
-        session = classes.Session(args.log, save_log=not args.no_log)
+        session = classes.Session(args.log, save=not args.no_log)
 else:
     session = classes.Session('session.' + current_time + '.log',
-                              save_log=not args.no_log)
+                              save=not args.no_log)
 
 # - set up a new plot
 # - define a new chain or likelihood function
@@ -59,6 +59,9 @@ options = (('Set up new joint constraint',
              'condition': session.plot_and_pdf_with_data_exist}),
            ('Change plot appearance',
             {'action': session.change_plot,
+             'condition': session.plot_exists}),
+           ('Save plot',
+            {'action': session.save_plot,
              'condition': session.plot_exists}))
 
 session.start_interactive(options=OrderedDict(options))

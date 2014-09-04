@@ -16,12 +16,12 @@ import utils
 
 class Session(object):
 
-    def __init__(self, name, path=None, save_log=True):
+    def __init__(self, name, path=None, save=True):
         self.settings = {}
         self.history_file = '.session_history'
         self.name = name
-        self.save_log = save_log
-        if save_log:
+        self.save = save
+        if save:
             self.log_file = os.path.join('Logs', time.strftime('%Y-%m-%d'), 
                                          name)
         self.plot = None
@@ -52,7 +52,7 @@ class Session(object):
             print 'Using settings from ' + old_log_file
             self.load_log(log_reader)
         # if not found, notify that new log file is assumed
-        elif self.save_log:
+        elif self.save:
             print 'No log file found. Creating new file:\n    ' + \
                 self.log_file
 
@@ -111,14 +111,19 @@ class Session(object):
             self.history = json.loads(reader.read())
         else:
             self.history = {'chains': [], 'likelihoods': []}
-        
+
+    def save_log(self, filename=None):
+        if filename is None:
+            filename = self.log_file
+        writer = utils.open_with_path(filename, 'wb')
+        writer.write(json.dumps(self.settings, sort_keys=True, indent=4))
+        writer.close()
+        print '\nLog file saved as ' + filename
+
     def save_and_exit(self):
         # save settings
-        if self.save_log:
-            writer = utils.open_with_path(self.log_file, 'wb')
-            writer.write(json.dumps(self.settings, sort_keys=True, indent=4))
-            writer.close()
-            print '\nLog file saved as ' + self.log_file
+        if self.save:
+            self.save_log()
 
         # save history
         history_writer = utils.open_with_path(self.history_file, 'w')
@@ -310,6 +315,18 @@ class Session(object):
         print '(If you cannot see the plot, try changing the '
         print 'matplotlib backend. Current backend is ' + \
             plt.get_backend() + '.)'
+
+    def save_plot(self):
+        # add options to change file format, background color/transparency,
+        # resolution, padding, etc.
+        file_prefix = os.path.join('Plots', time.strftime('%Y-%m-%d'), 
+                                   time.strftime('%Z.%H.%M.%S'))
+        plot_file = file_prefix + '.eps'
+        utils.check_path(plot_file)
+        plt.savefig(plot_file, format='eps', bbox_inches='tight')
+        print '\nPlot saved as ' + plot_file
+        plot_log_file = file_prefix + '.log'
+        self.save_log(filename=plot_log_file)
 
     # merge with get_col function?
     def get_row(self, default=None):
