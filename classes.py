@@ -209,9 +209,9 @@ class Session(object):
                                for ch in self.history['chains']]
                 m = Menu(options=options, more=details,
                          exit_str='New chain',
-                         header=['Choose a chain: ' \
-                                     '(add ? to the number to get ' \
-                                     'more info on a chain)'][0])
+                         header='Choose a chain: ' + \
+                             '(add ? to the number to get ' + \
+                             'more info on a chain)')
                 m.get_choice()
                 if m.choice == m.exit:
                     pdf.add_chain(*self.define_new_chain())
@@ -331,11 +331,14 @@ class Session(object):
         return col
 
     def change_plot(self):
-        # change to menu of options
         row = self.get_row()
         col = self.get_col()
-        self.plot.label_axes(row, col)
-        plt.draw()
+        options = {'Change axis labels': self.plot.label_axes}
+        m = Menu(options=options.keys(), exit_str='Cancel')
+        m.get_choice()
+        if m.choice != m.exit:
+            options[m.choice](row, col)
+            plt.draw()
 
     def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
         if pdf is None:
