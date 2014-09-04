@@ -4,6 +4,7 @@ import time
 import glob
 import json
 import textwrap
+from collections import OrderedDict
 import numpy as np
 from scipy import stats
 from sympy import symbols, sympify, lambdify
@@ -84,7 +85,7 @@ class Session(object):
 
         if 'plot' in log_settings:
             d = log_settings['plot']
-            self.set_up_plot((d['n_rows'], d['n_cols']))
+            self.set_up_plot(d)
             for row in range(d['n_rows']):
                 for col in range(d['n_cols']):
                     ax_settings = d['{0:d}.{1:d}'.format(row, col)]
@@ -282,10 +283,16 @@ class Session(object):
             parameters = self.choose_parameters(pdf)
             pdf.compute_1d_stats(parameters)
 
-    def set_up_plot(self, size=None):
-        if size:
-            n_rows = size[0]
-            n_cols = size[1]
+    def set_up_plot(self, settings=None):
+        self.plot = Plot()
+        if settings is not None:
+            for key in settings:
+                self.plot.settings[key] = settings[key]
+        self.settings['plot'] = self.plot.settings
+        if 'n_rows' in self.plot.settings and \
+                'n_cols' in self.plot.settings:
+            n_rows = self.plot.settings['n_rows']
+            n_cols = self.plot.settings['n_cols']
             print '\nSetting up {0:d}x{1:d} plot.'.format(n_rows, n_cols)
         else:
             e_str = 'Number of {0:s} must be an integer > 0.'
@@ -297,8 +304,6 @@ class Session(object):
         if n_rows < 1 or n_cols < 1:
             print 'Must have > 0 rows and columns.'
             self.set_up_plot()
-        self.plot = Plot()
-        self.settings['plot'] = self.plot.settings
         self.plot.set_up_plot_grid(n_rows, n_cols)
         plt.show(block=False)
         print '(If you cannot see the plot, try changing the '
@@ -341,7 +346,9 @@ class Session(object):
     def change_plot(self):
         row = self.get_row()
         col = self.get_col()
-        options = {'Change axis labels': self.plot.label_axes}
+        options = [('Change axis labels', self.plot.label_axes)]
+
+        options = OrderedDict(options)
         m = Menu(options=options.keys(), exit_str='Cancel')
         m.get_choice()
         if m.choice != m.exit:
@@ -539,12 +546,21 @@ class Plot(object):
 
     def plot_2d_pdf(self, ax, pdf, n_samples=5000, grid_size=(100, 100), 
                     smoothing=1.0, contour_pct=(95.45, 68.27),
-                    colors=None):
+                    colors=None, layer=None):
         ax.pdfs += [pdf]
         ax.set_rasterization_zorder(0)
         set_pdfs = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['pdfs']
         if pdf.name not in set_pdfs:
             set_pdfs[pdf.name] = {}
+        # plot new contour over others unless a layer is specified
+        if layer is None:
+            if 'layer' not in set_pdfs[pdf.name]:
+                for p in set_pdfs:
+                    if 'layer' in set_pdfs[p]:
+                        set_pdfs[p]['layer'] -= 1
+                set_pdfs[pdf.name]['layer'] = -1
+        else:
+            set_pdfs[pdf.name]['layer'] = layer
 
         contour_data = pdf.load_contour_data(n_samples, grid_size, smoothing, 
                                              contour_pct)
@@ -605,7 +621,8 @@ class Plot(object):
 
         # plot contours
         ax.contourf(X_2d, Y_2d, Z_2d, levels=sorted(contour_levels)+[np.inf],
-                    colors=colors)
+                    colors=colors, zorder=set_pdfs[pdf.name]['layer'],
+                    alpha=0.7, rasterized=True)
 
         if not ax.get_xlabel() and not ax.get_ylabel():
             self.label_axes(ax.row, ax.col, 
