@@ -68,6 +68,7 @@ class Session(object):
             # better?: self.set_up_pdf(settings=d)
             pdf = self.choose_pdf(name=d['name'])
             if 'chain_name' in d:
+                print 'Adding chain: ' + d['chain_name']
                 pdf.add_chain(d['chain_name'], d['chain_files'])
             for p in d['derived_parameters']:
                 p_dict = d['derived_parameters'][p]
@@ -172,6 +173,13 @@ class Session(object):
             if m.choice != m.exit:
                 chosen_pdf = pdfs[m.i_choice]
         return chosen_pdf
+
+    def print_pdf_settings(self):
+        pdf = self.choose_pdf()
+        if pdf is not None:
+            for key in sorted(pdf.settings):
+                print textwrap.fill(key + ': ' + str(pdf.settings[key]),
+                                    subsequent_indent='    ')
 
     def rename_pdf(self):
         pdf = self.choose_pdf()
