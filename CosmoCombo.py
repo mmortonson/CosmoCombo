@@ -5,7 +5,6 @@ import time
 import argparse
 from collections import OrderedDict
 
-#current_date = time.strftime('%Y-%m-%d')
 current_time = time.strftime('%Z.%H.%M.%S')
 
 parser = argparse.ArgumentParser()
@@ -45,6 +44,9 @@ options = (('Set up new joint constraint',
            ('Add MCMC chain', 
             {'action': session.add_chain, 
              'condition': session.pdf_without_chain_exists}),
+           ('Add a likelihood function',
+            {'action': session.add_likelihood,
+             'condition': session.pdf_exists}),
            ('Add a derived parameter',
             {'action': session.add_derived_parameter,
              'condition': session.pdf_with_data_exists}),
