@@ -101,7 +101,8 @@ class Session(object):
                         xlabel = ax_settings['xlabel']
                     if 'ylabel' in ax_settings:
                         ylabel = ax_settings['ylabel']
-                    self.plot.label_axes(row, col, xlabel=xlabel, ylabel=ylabel)
+                    self.plot.label_axes(self.plot.axes[row][col], 
+                                         xlabel=xlabel, ylabel=ylabel)
             plt.draw()
 
     def load_history(self):
@@ -346,13 +347,20 @@ class Session(object):
     def change_plot(self):
         row = self.get_row()
         col = self.get_col()
+        ax = self.plot.axes[row][col]
+        # options that apply to all subplots
         options = [('Change axis labels', self.plot.label_axes)]
-
+        # options specific to 1D or 2D plots
+        if len(ax.parameters) == 1:
+            options.extend([])
+        elif len(ax.parameters) == 2:
+            options.extend([('Change order of contour layers', 
+                             self.plot.change_layer_order)])
         options = OrderedDict(options)
         m = Menu(options=options.keys(), exit_str='Cancel')
         m.get_choice()
         if m.choice != m.exit:
-            options[m.choice](row, col)
+            options[m.choice](ax)
             plt.draw()
 
     def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
@@ -428,17 +436,19 @@ class Menu(object):
         self.prompt = '----\n> '
         if options:
             self.update_options(options)
-        else:
+        elif self.exit is not None:
             self.options = [self.exit]
+        else:
+            sys.exit('Cannot create Menu object without options' + \
+                         'or exit string.')
         self.more = more
 
     def update_options(self, options):
-        self.options = list(options) + [self.exit]
+        self.options = list(options)
+        if self.exit is not None:
+            self.options += [self.exit]
 
-    def get_choice(self, options=None):
-        more_info = False
-        if options:
-            self.update_options(options)
+    def print_options(self):
         print
         if self.header:
             print self.header
@@ -446,6 +456,12 @@ class Menu(object):
             print textwrap.fill(str(i) + ': ' + str(opt), 
                                 initial_indent='',
                                 subsequent_indent='    ')
+
+    def get_choice(self, options=None):
+        more_info = False
+        if options:
+            self.update_options(options)
+        self.print_options()
         response = raw_input(self.prompt).strip()
         # check whether more info is requested
         if self.more and response[-1] == '?':
@@ -454,7 +470,7 @@ class Menu(object):
         # get an integer
         try:
             i_choice = int(response)
-        except ValueError as e:
+        except ValueError:
             i_choice = -1
         # check that the integer corresponds to a valid option
         if i_choice >=0 and i_choice < len(self.options):
@@ -468,6 +484,21 @@ class Menu(object):
         if more_info:
             print str(self.more[self.i_choice])
             self.get_choice()
+
+    def get_order(self):
+        self.print_options()
+        response = raw_input(self.prompt).split()
+        new_order = []
+        for s in response:
+            try:
+                i = int(s)
+            except ValueError:
+                i = -1
+            new_order.append(i)
+        if sorted(new_order) != range(len(self.options)):
+            print 'Not a valid order.'
+            new_order = self.get_order()
+        return new_order
 
     def add_option(self, position=None):
         pass
@@ -495,13 +526,12 @@ class Plot(object):
             for j, ax in enumerate(ax_row):
                 ax.row = i
                 ax.col = j
-                ax.pdfs = []
+                ax.pdfs = {}
                 row_col_str = '{0:d}.{1:d}'.format(ax.row, ax.col)
                 if row_col_str not in self.settings:
                     self.settings[row_col_str] = {'pdfs': {}}
 
-    def label_axes(self, row, col, xlabel=None, ylabel=None):
-        ax = self.axes[row][col]
+    def label_axes(self, ax, xlabel=None, ylabel=None):
         if xlabel is None:
             new_label = raw_input('New x-axis label? (Press Enter to ' + \
                                       'keep the current label.)\n> ')
@@ -509,7 +539,8 @@ class Plot(object):
                 xlabel = new_label
         if xlabel is not None:
             ax.set_xlabel(xlabel)
-            self.settings['{0:d}.{1:d}'.format(row, col)]['xlabel'] = xlabel
+            self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['xlabel'] = \
+                xlabel
         if ylabel is None:
             new_label = raw_input('New y-axis label? (Press Enter to ' + \
                                       'keep the current label.)\n> ')
@@ -517,10 +548,11 @@ class Plot(object):
                 ylabel = new_label
         if ylabel is not None:
             ax.set_ylabel(ylabel)
-            self.settings['{0:d}.{1:d}'.format(row, col)]['ylabel'] = ylabel
+            self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['ylabel'] = \
+                ylabel
 
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
-        ax.pdfs += [pdf]
+        ax.pdfs[pdf.name] = pdf
         self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)] \
             ['pdfs'][pdf.name] = {}
         parameter = pdf.get_chain_parameter(ax.parameters[0])
@@ -540,14 +572,15 @@ class Plot(object):
             bin_centers = np.delete(bin_centers, -1)
         ax.plot(bin_centers, pdf_1d)
         if not ax.get_xlabel() and not ax.get_ylabel():
-            self.label_axes(ax.row, ax.col, 
+            self.label_axes(ax, 
                             xlabel=ax.parameters[0],
                             ylabel='P(' + ax.parameters[0] + ')')
 
+    # break up into multiple methods and/or separate functions
     def plot_2d_pdf(self, ax, pdf, n_samples=5000, grid_size=(100, 100), 
                     smoothing=1.0, contour_pct=(95.45, 68.27),
                     colors=None, layer=None):
-        ax.pdfs += [pdf]
+        ax.pdfs[pdf.name] = pdf
         ax.set_rasterization_zorder(0)
         set_pdfs = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['pdfs']
         if pdf.name not in set_pdfs:
@@ -560,6 +593,9 @@ class Plot(object):
                         set_pdfs[p]['layer'] -= 1
                 set_pdfs[pdf.name]['layer'] = -1
         else:
+            for p in set_pdfs:
+                if 'layer' in set_pdfs[p] and set_pdfs[p]['layer'] <= layer:
+                    set_pdfs[p]['layer'] -= 1
             set_pdfs[pdf.name]['layer'] = layer
 
         contour_data = pdf.load_contour_data(n_samples, grid_size, smoothing, 
@@ -625,9 +661,35 @@ class Plot(object):
                     alpha=0.7, rasterized=True)
 
         if not ax.get_xlabel() and not ax.get_ylabel():
-            self.label_axes(ax.row, ax.col, 
+            self.label_axes(ax, 
                             xlabel=ax.parameters[0],
                             ylabel=ax.parameters[1])
+
+    def change_layer_order(self, ax):
+        set_pdfs = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['pdfs']
+        # find current order
+        pdfs = []
+        layers = []
+        for pdf in set_pdfs:
+            if 'layer' in set_pdfs[pdf]:
+                layers.append(set_pdfs[pdf]['layer'])
+                pdfs.append(pdf)
+        old_layers = list(zip(*sorted(zip(pdfs, layers), 
+                                      key=lambda x: x[1],
+                                      reverse=True))[0])
+        # get new order (e.g. 1 0 2)
+        m = Menu(options=old_layers, exit_str=None, 
+                 header='Enter a new order for the constraints.\n' + \
+                     'The current order (top to bottom) is:')
+        new_layer_order = m.get_order()
+        new_layer_order.reverse()
+
+        # should clear subplot before plotting contours again,
+        # but don't want to change other plot elements
+
+        # re-plot pdfs in new order
+        for i in new_layer_order:
+            self.plot_2d_pdf(ax, ax.pdfs[old_layers[i]], layer=-1)
 
 
 class PostPDF(object):
