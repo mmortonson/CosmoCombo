@@ -454,7 +454,7 @@ class Session(object):
         if pdf is None:
             pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
-            ax = self.plot.select_subplot()
+            ax = self.plot.select_subplot(row=row, col=col)
             if len(ax.pdfs) == 0:
                 self.set_up_subplot(ax.row, ax.col, pdf, parameters)
             if pdf.settings['color'] is None:
@@ -617,9 +617,9 @@ class Plot(object):
                 if row_col_str not in self.settings:
                     self.settings[row_col_str] = {'pdfs': {}}
 
-    def select_subplot(self):
-        row = self.get_row()
-        col = self.get_col()
+    def select_subplot(self, row=None, col=None):
+        row = self.get_row(default=row)
+        col = self.get_col(default=col)
         return self.axes[row][col]
 
     # merge with get_col function?
@@ -677,7 +677,8 @@ class Plot(object):
             self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['ylabel'] = \
                 ylabel
 
-    def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01):
+    def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01,
+                    color=None):
         ax.pdfs[pdf.name] = pdf
         ax_settings = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]
         set_pdfs = ax_settings['pdfs']
@@ -698,7 +699,15 @@ class Plot(object):
         while pdf_1d[-1] < p_min_frac*pdf_1d.max():
             pdf_1d = np.delete(pdf_1d, -1)
             bin_centers = np.delete(bin_centers, -1)
-        ax.plot(bin_centers, pdf_1d)
+
+        if color is None:
+            if pdf.settings['color'] is None:
+                color = (0, 0, 0)
+            else:
+                color = pdf.settings['color']
+
+        ax.plot(bin_centers, pdf_1d, color=color)
+
         if 'xlabel' in ax_settings:
             xlabel = ax_settings['xlabel']
         else:
