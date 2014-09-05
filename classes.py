@@ -3,6 +3,7 @@ import os.path
 import time
 import glob
 import json
+from copy import deepcopy
 import textwrap
 from collections import OrderedDict
 import itertools
@@ -191,6 +192,16 @@ class Session(object):
             if m.choice != m.exit:
                 chosen_pdf = pdfs[m.i_choice]
         return chosen_pdf
+
+    def copy_pdf(self):
+        pdf = self.choose_pdf()
+        if pdf is not None:
+            new_pdf = deepcopy(pdf)
+            name = raw_input('\nLabel for copied constraint?\n> ')
+            new_pdf.name = name
+            new_pdf.settings['name'] = name
+            self.pdfs += [new_pdf]
+            self.settings['pdfs'][name] = new_pdf.settings
 
     def print_pdf_settings(self):
         pdf = self.choose_pdf()
