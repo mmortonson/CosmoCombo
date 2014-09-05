@@ -109,6 +109,8 @@ class Session(object):
                                                  pdf=self.choose_pdf(pdf),
                                                  parameters=ax_settings \
                                                      ['parameters'])
+                        if 'legend' in ax_settings and ax_settings['legend']:
+                            self.plot.add_legend(ax=self.plot.axes[row][col])
 
             self.plot.plot_grid.tight_layout(self.plot.figure)
             plt.draw()
@@ -408,7 +410,8 @@ class Session(object):
 
     def change_plot(self):
         # options that apply to all subplots
-        options = [('Change axis labels', self.plot.label_axes)]
+        options = [('Change axis labels', self.plot.label_axes),
+                   ('Add legend', self.plot.add_legend)]
         # change appearance of a PDF
         if self.pdf_exists():
             options.extend([('Change constraint color', 
@@ -677,6 +680,12 @@ class Plot(object):
             self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['ylabel'] = \
                 ylabel
 
+    def add_legend(self, ax=None):
+        if ax is None:
+            ax = self.select_subplot()
+        ax.legend(frameon=False)
+        self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['legend'] = True
+
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01,
                     color=None):
         ax.pdfs[pdf.name] = pdf
@@ -706,7 +715,7 @@ class Plot(object):
             else:
                 color = pdf.settings['color']
 
-        ax.plot(bin_centers, pdf_1d, color=color)
+        ax.plot(bin_centers, pdf_1d, color=color, label=pdf.name)
 
         if 'xlabel' in ax_settings:
             xlabel = ax_settings['xlabel']
