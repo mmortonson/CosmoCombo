@@ -406,69 +406,57 @@ class Session(object):
         plot_log_file = file_prefix + '.log'
         self.save_log(filename=plot_log_file)
 
-    # merge with get_col function?
-    def get_row(self, default=None):
-        n_rows = self.plot.settings['n_rows']
-        if default is None:
-            if n_rows > 1:
-                row = utils.get_input_integer( \
-                    '\nSubplot row (0-' + str(n_rows - 1) + ')?\n> ',
-                    error_text='Must choose an integer.')[0]
-            else:
-                row = 0
-        else:
-            row = default
-        if row < 0 or row > n_rows - 1:
-            print 'Row number is out of required range.'
-            row = self.get_row()
-        return row
-
-    def get_col(self, default=None):
-        n_cols = self.plot.settings['n_cols']
-        if default is None:
-            if n_cols > 1:
-                col = utils.get_input_integer( \
-                    '\nSubplot column (0-' + str(n_cols - 1) + ')?\n> ',
-                    error_text='Must choose an integer.')[0]
-            else:
-                col = 0
-        else:
-            col = default
-        if col < 0 or col > n_cols - 1:
-            print 'Column number is out of required range.'
-            col = self.get_col()
-        return col
-
     def change_plot(self):
-        row = self.get_row()
-        col = self.get_col()
-        ax = self.plot.axes[row][col]
         # options that apply to all subplots
         options = [('Change axis labels', self.plot.label_axes)]
+        # change appearance of a PDF
+        if self.pdf_exists():
+            options.extend([('Change constraint color', 
+                             self.change_pdf_color)])
         # options specific to 1D or 2D plots
-        if hasattr(ax, 'parameters'):
-            if len(ax.parameters) == 1:
-                options.extend([])
-            elif len(ax.parameters) == 2:
-                options.extend([('Change order of contour layers', 
-                                 self.plot.change_layer_order)])
+        subplot_1d_exists = False
+        subplot_2d_exists = False
+        subplot_2d_has_multiple_contours = False
+        for ax_row in self.plot.axes:
+            for ax in ax_row:
+                if hasattr(ax, 'parameters'):
+                    if len(ax.parameters) == 1:
+                        subplot_1d_exists = True
+                    elif len(ax.parameters) == 2:
+                        subplot_2d_exists = True
+                        if len(ax.pdfs) > 1:
+                            subplot_2d_has_multiple_contours = True
+        if subplot_2d_has_multiple_contours:
+            options.extend([('Change order of contour layers', 
+                             self.plot.change_layer_order)])
         options = OrderedDict(options)
         m = Menu(options=options.keys(), exit_str='Cancel')
         m.get_choice()
         if m.choice != m.exit:
-            options[m.choice](ax)
+            options[m.choice]()
             self.plot.plot_grid.tight_layout(self.plot.figure)
             plt.draw()
+
+    def change_pdf_color(self):
+        pdf = self.choose_pdf()
+        if pdf is not None:
+            pdf.set_color()
+            if self.plot:
+                for ax_row in self.plot.axes:
+                    for ax in ax_row:
+                        subplot_pdfs = self.plot.settings \
+                            ['{0:d}.{1:d}'.format(ax.row, ax.col)] \
+                            ['pdfs']
+                        if pdf.name in subplot_pdfs:
+                            self.plot_constraint(ax.row, ax.col, pdf=pdf)
 
     def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
         if pdf is None:
             pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
-            row = self.get_row(default=row)
-            col = self.get_col(default=col)
-            ax = self.plot.axes[row][col]
+            ax = self.plot.select_subplot()
             if len(ax.pdfs) == 0:
-                self.set_up_subplot(row, col, pdf, parameters)
+                self.set_up_subplot(ax.row, ax.col, pdf, parameters)
             if pdf.settings['color'] is None:
                 pdf.set_color()
             n_dim = len(ax.parameters)
@@ -629,7 +617,47 @@ class Plot(object):
                 if row_col_str not in self.settings:
                     self.settings[row_col_str] = {'pdfs': {}}
 
-    def label_axes(self, ax, xlabel=None, ylabel=None):
+    def select_subplot(self):
+        row = self.get_row()
+        col = self.get_col()
+        return self.axes[row][col]
+
+    # merge with get_col function?
+    def get_row(self, default=None):
+        n_rows = self.settings['n_rows']
+        if default is None:
+            if n_rows > 1:
+                row = utils.get_input_integer( \
+                    '\nSubplot row (0-' + str(n_rows - 1) + ')?\n> ',
+                    error_text='Must choose an integer.')[0]
+            else:
+                row = 0
+        else:
+            row = default
+        if row < 0 or row > n_rows - 1:
+            print 'Row number is out of required range.'
+            row = self.get_row()
+        return row
+
+    def get_col(self, default=None):
+        n_cols = self.settings['n_cols']
+        if default is None:
+            if n_cols > 1:
+                col = utils.get_input_integer( \
+                    '\nSubplot column (0-' + str(n_cols - 1) + ')?\n> ',
+                    error_text='Must choose an integer.')[0]
+            else:
+                col = 0
+        else:
+            col = default
+        if col < 0 or col > n_cols - 1:
+            print 'Column number is out of required range.'
+            col = self.get_col()
+        return col
+
+    def label_axes(self, ax=None, xlabel=None, ylabel=None):
+        if ax is None:
+            ax = self.select_subplot()
         if xlabel is None:
             new_label = raw_input('New x-axis label? (Press Enter to ' + \
                                       'keep the current label.)\n> ')
@@ -776,7 +804,9 @@ class Plot(object):
             ylabel = ax.parameters[1]
         self.label_axes(ax, xlabel=xlabel, ylabel=ylabel)
 
-    def change_layer_order(self, ax):
+    def change_layer_order(self, ax=None):
+        if ax is None:
+            ax = self.select_subplot()
         set_pdfs = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['pdfs']
         # find current order
         pdfs = []
