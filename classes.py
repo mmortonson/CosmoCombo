@@ -110,8 +110,8 @@ class Session(object):
                                                  parameters=ax_settings \
                                                      ['parameters'])
 
+            self.plot.plot_grid.tight_layout(self.plot.figure)
             plt.draw()
-            plt.tight_layout()
 
     def load_history(self):
         if os.path.isfile(self.history_file):
@@ -388,8 +388,8 @@ class Session(object):
             print 'Must have > 0 rows and columns.'
             self.set_up_plot()
         self.plot.set_up_plot_grid(n_rows, n_cols)
+        self.plot.plot_grid.tight_layout(self.plot.figure)
         plt.show(block=False)
-        plt.tight_layout()
         print '(If you cannot see the plot, try changing the '
         print 'matplotlib backend. Current backend is ' + \
             plt.get_backend() + '.)'
@@ -457,8 +457,8 @@ class Session(object):
         m.get_choice()
         if m.choice != m.exit:
             options[m.choice](ax)
+            self.plot.plot_grid.tight_layout(self.plot.figure)
             plt.draw()
-            plt.tight_layout()
 
     def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
         if pdf is None:
@@ -605,6 +605,7 @@ class Plot(object):
 
     def __init__(self):
         self.settings = {'n_rows': None, 'n_cols': None}
+        self.figure = plt.figure()
 
     def set_up_plot_grid(self, n_rows, n_cols):
         # assume all subplots occupy a single row and column for now
