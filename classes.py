@@ -72,9 +72,11 @@ class Session(object):
             if 'chain_name' in d:
                 print 'Adding chain: ' + d['chain_name']
                 pdf.add_chain(d['chain_name'], d['chain_files'])
-                if 'chain_name' not in self.history['chains']:
-                    self.history['chains'].append((d['chain_name'],
-                                                   d['chain_files']))
+                for chain in list(self.history['chains']):
+                    if chain[0] == d['chain_name']:
+                        self.history['chains'].remove(chain)
+                self.history['chains'].append((d['chain_name'],
+                                               d['chain_files']))
             for p in d['derived_parameters']:
                 p_dict = d['derived_parameters'][p]
                 pdf.add_derived_parameter(p, p_dict['function'],
@@ -84,9 +86,11 @@ class Session(object):
                 for lk in d['likelihoods']:
                     print 'Adding likelihood: ' + lk
                     pdf.add_likelihood(lk, **d['likelihoods'][lk])
-                    if lk not in self.history['likelihoods']:
-                        self.history['likelihoods'].append( \
-                            (lk, d['likelihoods'][lk]))
+                    for hist_lk in list(self.history['likelihoods']):
+                        if hist_lk[0] == lk:
+                            self.history['likelihoods'].remove(hist_lk)
+                    self.history['likelihoods'].append( \
+                        (lk, d['likelihoods'][lk]))
             if 'contour_data_files' in d:
                 pdf.settings['contour_data_files'] = d['contour_data_files']
             if ('color' in d) and (d['color'] is not None):
@@ -106,6 +110,7 @@ class Session(object):
                                                      ['parameters'])
 
             plt.draw()
+            plt.tight_layout()
 
     def load_history(self):
         if os.path.isfile(self.history_file):
@@ -357,10 +362,9 @@ class Session(object):
             for key in settings:
                 self.plot.settings[key] = settings[key]
         self.settings['plot'] = self.plot.settings
-        if 'n_rows' in self.plot.settings and \
-                'n_cols' in self.plot.settings:
-            n_rows = self.plot.settings['n_rows']
-            n_cols = self.plot.settings['n_cols']
+        n_rows = self.plot.settings['n_rows']
+        n_cols = self.plot.settings['n_cols']
+        if n_rows is not None and n_cols is not None:
             print '\nSetting up {0:d}x{1:d} plot.'.format(n_rows, n_cols)
         else:
             e_str = 'Number of {0:s} must be an integer > 0.'
@@ -374,6 +378,7 @@ class Session(object):
             self.set_up_plot()
         self.plot.set_up_plot_grid(n_rows, n_cols)
         plt.show(block=False)
+        plt.tight_layout()
         print '(If you cannot see the plot, try changing the '
         print 'matplotlib backend. Current backend is ' + \
             plt.get_backend() + '.)'
@@ -430,17 +435,19 @@ class Session(object):
         # options that apply to all subplots
         options = [('Change axis labels', self.plot.label_axes)]
         # options specific to 1D or 2D plots
-        if len(ax.parameters) == 1:
-            options.extend([])
-        elif len(ax.parameters) == 2:
-            options.extend([('Change order of contour layers', 
-                             self.plot.change_layer_order)])
+        if hasattr(ax, 'parameters'):
+            if len(ax.parameters) == 1:
+                options.extend([])
+            elif len(ax.parameters) == 2:
+                options.extend([('Change order of contour layers', 
+                                 self.plot.change_layer_order)])
         options = OrderedDict(options)
         m = Menu(options=options.keys(), exit_str='Cancel')
         m.get_choice()
         if m.choice != m.exit:
             options[m.choice](ax)
             plt.draw()
+            plt.tight_layout()
 
     def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
         if pdf is None:
@@ -586,7 +593,7 @@ class Menu(object):
 class Plot(object):
 
     def __init__(self):
-        self.settings = {'n_rows': 1, 'n_cols': 1}
+        self.settings = {'n_rows': None, 'n_cols': None}
 
     def set_up_plot_grid(self, n_rows, n_cols):
         # assume all subplots occupy a single row and column for now
@@ -828,6 +835,7 @@ class PostPDF(object):
 
         # if chain exists, importance sample
         if self.chain is not None:
+            print 'Importance sampling...'
             self.chain.importance_sample(self.likelihoods[name])
 
         self.add_parameters(kwargs['parameters'])
