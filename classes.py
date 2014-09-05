@@ -5,6 +5,7 @@ import glob
 import json
 import textwrap
 from collections import OrderedDict
+import itertools
 import numpy as np
 from scipy import stats
 from sympy import symbols, sympify, lambdify
@@ -31,6 +32,10 @@ class Session(object):
             self.settings[attr] = getattr(self, attr)
         self.settings['pdfs'] = {}
 
+        # check for file with inputs from all previous sessions
+        # (e.g. chains, likelihoods, joint pdfs) and load it
+        self.load_history()
+
         log_reader = None
         # if path is given, search it for the named log (error if not found)
         if path:
@@ -56,10 +61,6 @@ class Session(object):
             print 'No log file found. Creating new file:\n    ' + \
                 self.log_file
 
-        # check for file with inputs from all previous sessions
-        # (e.g. chains, likelihoods, joint pdfs) and load it
-        self.load_history()
-
     def load_log(self, reader):
         log_settings = json.loads(reader.read())
         reader.close()
@@ -71,17 +72,25 @@ class Session(object):
             if 'chain_name' in d:
                 print 'Adding chain: ' + d['chain_name']
                 pdf.add_chain(d['chain_name'], d['chain_files'])
+                if 'chain_name' not in self.history['chains']:
+                    self.history['chains'].append((d['chain_name'],
+                                                   d['chain_files']))
             for p in d['derived_parameters']:
                 p_dict = d['derived_parameters'][p]
                 pdf.add_derived_parameter(p, p_dict['function'],
                                           p_dict['parameters'],
                                           p_dict['indices'])
+            if 'likelihoods' in d:
+                for lk in d['likelihoods']:
+                    print 'Adding likelihood: ' + lk
+                    pdf.add_likelihood(lk, **d['likelihoods'][lk])
+                    if lk not in self.history['likelihoods']:
+                        self.history['likelihoods'].append( \
+                            (lk, d['likelihoods'][lk]))
             if 'contour_data_files' in d:
                 pdf.settings['contour_data_files'] = d['contour_data_files']
             if ('color' in d) and (d['color'] is not None):
                 pdf.settings['color'] = tuple(d['color'])
-
-        # add likelihoods
 
         if 'plot' in log_settings:
             d = log_settings['plot']
@@ -95,22 +104,17 @@ class Session(object):
                                                  pdf=self.choose_pdf(pdf),
                                                  parameters=ax_settings \
                                                      ['parameters'])
-                    """
-                    xlabel = ''
-                    ylabel = ''
-                    if 'xlabel' in ax_settings:
-                        xlabel = ax_settings['xlabel']
-                    if 'ylabel' in ax_settings:
-                        ylabel = ax_settings['ylabel']
-                    self.plot.label_axes(self.plot.axes[row][col], 
-                                         xlabel=xlabel, ylabel=ylabel)
-                    """
+
             plt.draw()
 
     def load_history(self):
         if os.path.isfile(self.history_file):
             reader = open(self.history_file, 'r')
-            self.history = json.loads(reader.read())
+            try:
+                self.history = json.loads(reader.read())
+            except ValueError:
+                self.history = {'chains': [], 'likelihoods': []}
+            reader.close()
         else:
             self.history = {'chains': [], 'likelihoods': []}
 
@@ -226,7 +230,7 @@ class Session(object):
                                for ch in self.history['chains']]
                 m = Menu(options=options, more=details,
                          exit_str='New chain',
-                         header='Choose a chain: ' + \
+                         header='Choose a chain:\n' + \
                              '(add ? to the number to get ' + \
                              'more info on a chain)')
                 m.get_choice()
@@ -256,32 +260,55 @@ class Session(object):
             if len(self.history['likelihoods']) > 0:
                 options = [lk[0] for lk in self.history['likelihoods']]
                 details = ['Likelihoods:\n' + '\n'.join(
-                        [textwrap.fill(s, initial_indent='    ',
-                                       subsequent_indent='        ') \
-                             for s in sorted(lk[1])]) \
+                        ['    ' + s + ': ' +  str(lk[1][s]) \
+                             for s in sorted(lk[1].keys())]) \
                                for lk in self.history['likelihoods']]
                 m = Menu(options=options, more=details,
                          exit_str='New likelihood',
-                         header='Choose a likelihood function: ' + \
+                         header='Choose a likelihood function:\n' + \
                              '(add ? to the number to get ' + \
                              'more info on a likelihood)')
                 m.get_choice()
                 if m.choice == m.exit:
-                    pdf.add_likelihood(*self.define_new_likelihood())
+                    new_lk = self.define_new_likelihood(pdf)
+                    pdf.add_likelihood(new_lk[0], **new_lk[1])
                 else:
-                    pdf.add_likelihood(*self.history['likelihoods'][m.i_choice])
+                    lk = self.history['likelihoods'][m.i_choice]
+                    pdf.add_likelihood(lk[0], **lk[1])
             else:
-                pdf.add_likelihood(*self.define_new_likelihood())
+                new_lk = self.define_new_likelihood(pdf)
+                pdf.add_likelihood(new_lk[0], **new_lk[1])
 
-    def define_new_likelihood(self):
+    def define_new_likelihood(self, pdf):
         # if chain exists, choose some parameters from there
         # can also add new parameters
-        # modify add_chain - if likelihood already included in constraint
-        #   when chain is added, need to check whether likelihood parameters
-        #   are also in the chain
-        pass
+        name = raw_input('Label for likelihood?\n> ')
+        form = 'gaussian'
+        if form in ['gaussian']:
+            parameters = self.choose_parameters(pdf, 
+                                                allow_extra_parameters=True)
+            means = utils.get_input_float('Enter mean values:\n> ',
+                                          num=len(parameters))
+            variances = utils.get_input_float('Enter variances:\n> ',
+                                              num=len(parameters))
+            covariance = np.diag(variances)
+            for i, j in itertools.combinations(range(len(parameters)), 2):
+                covariance[i, j] = utils.get_input_float( \
+                    'Cov(' + parameters[i] + ', ' + parameters[j] + ')?\n> ')[0]
+                covariance[j, i] = covariance[i, j]
+            covariance = covariance.tolist()
 
-    def choose_parameters(self, pdf):
+        new_lk = (name, {'form': form, 'parameters': parameters, 
+                         'means': means, 'covariance': covariance})
+
+        # check if name is already in history; if so, replace with new
+        for lk in list(self.history['likelihoods']):
+            if lk[0] == name:
+                self.history['likelihoods'].remove(lk)
+        self.history['likelihoods'].append(new_lk)
+        return new_lk
+
+    def choose_parameters(self, pdf, allow_extra_parameters=False):
         # choose one or more parameters 
         # (enter names or pick from chain column list)
         print '\nEnter one or more parameter names (on one line),'
@@ -289,11 +316,12 @@ class Session(object):
         parameters = raw_input('> ').split()
         if len(parameters) == 0:
             pdf.display_parameters()
-            parameters = self.choose_parameters(pdf)
+            parameters = self.choose_parameters(pdf, allow_extra_parameters)
         else:
             extra_parameters = list(np.array(parameters)[np.where([
                     p not in pdf.parameters for p in parameters])[0]])
-            if len(extra_parameters) > 0:
+            if not allow_extra_parameters and len(extra_parameters) > 0:
+                print allow_extra_parameters, len(extra_parameters)>0
                 print 'The PDF ' + pdf.name + \
                     ' does not have the following parameters:'
                 print ', '.join(extra_parameters)
@@ -460,7 +488,7 @@ class Session(object):
     def pdf_with_data_exists(self):
         answer = False
         for pdf in self.pdfs:
-            if pdf.chain or len(pdf.likelihoods) > 0:
+            if (pdf.chain is not None) or len(pdf.likelihoods) > 0:
                 answer = True
         return answer
 
@@ -765,10 +793,11 @@ class PostPDF(object):
         self.parameters = []
         self.chain = None
         self.chain_files = []
-        self.likelihoods = []
+        self.likelihoods = {}
         for attr in ['name', 'model', 'parameters', 
-                     'chain_files', 'likelihoods']:
+                     'chain_files']:
             self.settings[attr] = getattr(self, attr)
+        self.settings['likelihoods'] = {}
         self.settings['contour_data_files'] = []
         self.settings['color'] = None
         self.settings['derived_parameters'] = {}
@@ -781,10 +810,35 @@ class PostPDF(object):
         self.chain_files.extend(files)
         self.settings['chain_name'] = name
         self.chain = MCMCChain(name, files)
-        self.add_parameters(self.chain.parameters)
 
-    def add_likelihood(self):
-        pass
+        # if likelihood already included in constraint
+        # when chain is added, need to check whether likelihood parameters
+        # are also in the chain; also importance sample
+
+        self.add_parameters(self.chain.parameters)
+        self.settings['contour_data_files'] = []
+
+    def add_likelihood(self, name, **kwargs):
+        # check if name is unique (not already in self.likelihoods)
+
+        self.settings['likelihoods'][name] = kwargs
+
+        if kwargs['form'] == 'gaussian':
+            self.add_gaussian_likelihood(name, **kwargs)
+
+        # if chain exists, importance sample
+        if self.chain is not None:
+            self.chain.importance_sample(self.likelihoods[name])
+
+        self.add_parameters(kwargs['parameters'])
+        self.settings['contour_data_files'] = []
+
+    def add_gaussian_likelihood(self, name, **kwargs):
+        self.likelihoods[name] = GaussianLikelihood()
+        self.likelihoods[name].set_parameter_means( \
+            **dict(zip(kwargs['parameters'], kwargs['means'])))
+        self.likelihoods[name].set_covariance(kwargs['covariance'],
+                                              kwargs['parameters'])
 
     def add_parameters(self, new_parameters):
         for p in new_parameters:
@@ -946,25 +1000,25 @@ class MCMCChain(object):
             parameters.append( line.strip().split()[0].split('*')[0] )
         return parameters
 
-    """
     def thin(self, thinning_factor):
         # would be more accurate to account for varying multiplicities
         self.samples = self.samples[::thinning_factor,:]
         self.multiplicity = self.multiplicity[::thinning_factor]
 
-    def importance_sample(self, likelihood, parameter_functions, 
+    def importance_sample(self, likelihood, 
                           invert=False, print_status=False):
         # *********************************************************
         # need to update anything else that depends on multiplicity
         # after running this
         # *********************************************************
-        parameters = {}
+        parameter_values = {}
         n_samples = len(self.multiplicity)
         for i in range(n_samples):
-            for par in parameter_functions:
-                parameters[par] = parameter_functions[par](\
-                    self.samples[i,:], self.column_names)
-            chisq = likelihood.chi_squared(**parameters)
+            for p in likelihood.parameters.keys():
+                j = np.where(np.array(self.parameters) == p)[0] + \
+                    self.first_par_column
+                parameter_values[p] = self.samples[i, j]
+            chisq = likelihood.chi_squared(**parameter_values)
             if invert:
                 self.multiplicity[i] *= np.exp(0.5*chisq)
             else:
@@ -974,7 +1028,6 @@ class MCMCChain(object):
                     ': chi squared =', chisq,
                 sys.stdout.flush()
                 print '\r',
-    """
 
     def rename(self, new_name):
         # check that name is unique
