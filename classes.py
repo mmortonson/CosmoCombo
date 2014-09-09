@@ -301,8 +301,11 @@ class Session(object):
         # if chain exists, choose some parameters from there
         # can also add new parameters
         name = raw_input('Label for likelihood?\n> ')
-        form = 'gaussian'
-        if form in ['gaussian']:
+        m = Menu(options=['Gaussian', 'Inverse Gaussian'], exit_str=None,
+                 header='Choose the form of the likelihood:\n> ')
+        m.get_choice()
+        form = m.choice
+        if form in ['Gaussian', 'Inverse Gaussian']:
             parameters = self.choose_parameters(pdf, 
                                                 allow_extra_parameters=True)
             means = utils.get_input_float('Enter mean values:\n> ',
@@ -889,8 +892,11 @@ class PostPDF(object):
         # check if name is unique (not already in self.likelihoods)
 
         self.settings['likelihoods'][name] = kwargs
-
-        if kwargs['form'] == 'gaussian':
+        kwargs['invert'] = False
+        if kwargs['form'] == 'Gaussian':
+            self.add_gaussian_likelihood(name, **kwargs)
+        elif kwargs['form'] == 'Inverse Gaussian':
+            kwargs['invert'] = True
             self.add_gaussian_likelihood(name, **kwargs)
 
         # if chain exists, importance sample
@@ -902,7 +908,7 @@ class PostPDF(object):
         self.settings['contour_data_files'] = []
 
     def add_gaussian_likelihood(self, name, **kwargs):
-        self.likelihoods[name] = GaussianLikelihood()
+        self.likelihoods[name] = GaussianLikelihood(invert=kwargs['invert'])
         self.likelihoods[name].set_parameter_means( \
             **dict(zip(kwargs['parameters'], kwargs['means'])))
         self.likelihoods[name].set_covariance(kwargs['covariance'],
@@ -1161,8 +1167,9 @@ class ChainParameter(object):
 
 class Likelihood(object):
 
-    def __init__(self):
+    def __init__(self, invert=False):
         self.parameters = {}
+        self.invert = invert
 
 
 class Likelihood1DFromFile(Likelihood):
@@ -1189,6 +1196,8 @@ class Likelihood1DFromFile(Likelihood):
                                    self.parameters[parameter]['values'], \
                                    self.parameters[parameter]['likelihood'])
                 chisq += -2.*np.log(likelihood)
+        if self.invert:
+            chisq = -chisq
         return chisq
 
 
@@ -1228,6 +1237,8 @@ class GaussianLikelihood(Likelihood):
                 chisq += (kwargs[par1] - self.parameters[par1]['mean']) * \
                          (kwargs[par2] - self.parameters[par2]['mean']) * \
                          self.parameters[par1]['inverse_covariance'][par2]
+        if self.invert:
+            chisq = -chisq
         return chisq
 
 
@@ -1268,5 +1279,7 @@ class GaussianSNLikelihood(GaussianLikelihood):
                 chisq += dp1 * dp2 * inv_cov
                 chisq_offset += dp2 * inv_cov
         chisq -= chisq_offset**2 / self.inv_cov_sum
+        if self.invert:
+            chisq = -chisq
         return chisq
 
