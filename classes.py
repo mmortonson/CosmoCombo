@@ -13,6 +13,7 @@ from sympy import symbols, sympify, lambdify
 import matplotlib
 matplotlib.use('GTKAgg')
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import default_plot_settings
 import utils
 
@@ -686,7 +687,13 @@ class Plot(object):
     def add_legend(self, ax=None):
         if ax is None:
             ax = self.select_subplot()
-        ax.legend(frameon=False)
+        if len(ax.parameters) == 1:
+            ax.legend(frameon=False)
+        elif len(ax.parameters) == 2:
+            patches = []
+            for pdf in ax.pdfs:
+                patches.append(mpatches.Patch(color=pdf.color, label=pdf.name))
+            ax.legend(handles=patches, frameon=False)
         self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['legend'] = True
 
     def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01,
