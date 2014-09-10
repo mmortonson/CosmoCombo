@@ -691,8 +691,12 @@ class Plot(object):
             ax.legend(frameon=False)
         elif len(ax.parameters) == 2:
             patches = []
-            for pdf in ax.pdfs:
-                patches.append(mpatches.Patch(color=pdf.color, label=pdf.name))
+            for pdf_name in ax.pdfs:
+                pdf = ax.pdfs[pdf_name]
+                if pdf.settings['color'] is None:
+                    pdf.set_color()
+                patches.append(mpatches.Patch(color=pdf.settings['color'], 
+                                              label=pdf_name))
             ax.legend(handles=patches, frameon=False)
         self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['legend'] = True
 
