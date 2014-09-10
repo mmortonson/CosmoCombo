@@ -600,7 +600,7 @@ class Plot(object):
 
     def __init__(self):
         self.settings = {'n_rows': None, 'n_cols': None}
-        self.figure = plt.figure()
+        self.figure = None
 
     def set_up_plot_grid(self, n_rows, n_cols):
         # assume all subplots occupy a single row and column for now
@@ -609,6 +609,9 @@ class Plot(object):
         self.settings['n_rows'] = n_rows
         self.settings['n_cols'] = n_cols
         self.plot_grid = matplotlib.gridspec.GridSpec(n_rows, n_cols)
+        figsize = plt.rcParams['figure.figsize']
+        self.figure = plt.figure(figsize=(n_cols*figsize[0], 
+                                          n_rows*figsize[1]))
         self.axes = []
         for i in range(n_rows):
             row = []
