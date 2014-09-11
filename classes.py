@@ -420,7 +420,8 @@ class Session(object):
 
     def change_plot(self):
         # options that apply to all subplots
-        options = [('Change axis labels', self.plot.label_axes),
+        options = [('Change axis limits', self.plot.change_limits),
+                   ('Change axis labels', self.plot.label_axes),
                    ('Add legend', self.plot.add_legend)]
         # change appearance of a PDF
         if self.pdf_exists():
@@ -491,27 +492,7 @@ class Session(object):
             print 'Number of parameters must be 1 or 2.'
             self.set_up_subplot(row, col, pdf, parameters, limits)
         ax_settings['parameters'] = ax.parameters
-        if limits is None:
-            x_limits = utils.get_input_float('\nPlot limits for ' + \
-                                                 ax.parameters[0] + \
-                                                 ' (lower upper)?\n> ', num=2)
-        else:
-            x_limits = limits[0]
-        ax.set_xlim(x_limits)
-        ax_settings['x_limits'] = x_limits
-        if len(ax.parameters) == 2:
-            if limits is None:
-                y_limits = utils.get_input_float('\nPlot limits for ' + \
-                                                     ax.parameters[1] + \
-                                                     ' (lower upper)?\n> ', 
-                                                 num=2)
-            else:
-                y_limits = limits[1]
-            ax.set_ylim(y_limits)
-            ax_settings['y_limits'] = y_limits
-
-    def change_limits(self, par_name):
-        pass 
+        self.plot.change_limits(ax=ax, limits=limits)
 
     def pdf_exists(self):
         if len(self.pdfs) > 0:
@@ -692,6 +673,29 @@ class Plot(object):
             print 'Column number is out of required range.'
             col = self.get_col()
         return col
+
+    def change_limits(self, ax=None, limits=None):
+        if ax is None:
+            ax = self.select_subplot()
+        ax_settings = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]
+        if limits is None:
+            x_limits = utils.get_input_float('\nPlot limits for ' + \
+                                                 ax.parameters[0] + \
+                                                 ' (lower upper)?\n> ', num=2)
+        else:
+            x_limits = limits[0]
+        ax.set_xlim(x_limits)
+        ax_settings['x_limits'] = x_limits
+        if len(ax.parameters) == 2:
+            if limits is None:
+                y_limits = utils.get_input_float('\nPlot limits for ' + \
+                                                     ax.parameters[1] + \
+                                                     ' (lower upper)?\n> ', 
+                                                 num=2)
+            else:
+                y_limits = limits[1]
+            ax.set_ylim(y_limits)
+            ax_settings['y_limits'] = y_limits
 
     def label_axes(self, ax=None, xlabel=None, ylabel=None):
         if ax is None:
