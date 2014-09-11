@@ -190,9 +190,8 @@ class Session(object):
         for pdf in list(pdfs):
             if name and pdf.name == name:
                 chosen_pdf = pdf
-            if (require_no_chain and (pdf.chain is not None)) or \
-                    (require_data and (pdf.chain is None) and \
-                         len(pdf.likelihoods) == 0):
+            if (require_no_chain and pdf.has_mcmc()) or \
+                    (require_data and (pdf.chain is None)):
                 pdfs.remove(pdf)
         if not chosen_pdf:
             m = Menu(options=[pdf.name for pdf in pdfs], exit_str='Cancel',
@@ -315,6 +314,7 @@ class Session(object):
         if form in ['Gaussian', 'Inverse Gaussian']:
             parameters = self.choose_parameters(pdf, 
                                                 allow_extra_parameters=True)
+            priors = 
             means = utils.get_input_float('Enter mean values:\n> ',
                                           num=len(parameters))
             variances = utils.get_input_float('Enter variances:\n> ',
@@ -503,14 +503,14 @@ class Session(object):
     def pdf_without_chain_exists(self):
         answer = False
         for pdf in self.pdfs:
-            if pdf.chain is None:
+            if not pdf.has_mcmc():
                 answer = True
         return answer
 
     def pdf_with_data_exists(self):
         answer = False
         for pdf in self.pdfs:
-            if (pdf.chain is not None) or len(pdf.likelihoods) > 0:
+            if pdf.chain is not None:
                 answer = True
         return answer
 
@@ -918,6 +918,12 @@ class PostPDF(object):
         self.settings['color'] = None
         self.settings['derived_parameters'] = {}
 
+    def has_mcmc(self):
+        if len(self.chain_files) > 0:
+            return True
+        else:
+            return False
+
     def add_chain(self, name, files):
         # check if already have chain, if files exist, if name is unique
 
@@ -945,10 +951,16 @@ class PostPDF(object):
             kwargs['invert'] = True
             self.add_gaussian_likelihood(name, **kwargs)
 
-        # if chain exists, importance sample
-        if self.chain is not None:
+        # if this is a new PDF, create a "chain" with 
+        # random samples within the priors
+        if self.chain is None:
+            self.chain = MCMCChain(None, [], 
+                                   parameters=kwargs['parameters'], 
+                                   priors=kwargs['priors'])
+        else:
             print 'Importance sampling...'
-            self.chain.importance_sample(self.likelihoods[name])
+
+        self.chain.importance_sample(self.likelihoods[name])
 
         self.add_parameters(kwargs['parameters'])
         self.settings['contour_data_files'] = []
