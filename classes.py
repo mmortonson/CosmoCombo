@@ -104,12 +104,18 @@ class Session(object):
             for row in range(d['n_rows']):
                 for col in range(d['n_cols']):
                     ax_settings = d['{0:d}.{1:d}'.format(row, col)]
+                    limits = None
+                    if 'x_limits' in ax_settings:
+                        limits = [ax_settings['x_limits']]
+                        if 'y_limits' in ax_settings:
+                            limits.append(ax_settings['y_limits'])
                     if 'pdfs' in ax_settings:
                         for pdf in ax_settings['pdfs']:
                             self.plot_constraint(row=row, col=col,
                                                  pdf=self.choose_pdf(pdf),
                                                  parameters=ax_settings \
-                                                     ['parameters'])
+                                                     ['parameters'],
+                                                 limits=limits)
                         if 'legend' in ax_settings and ax_settings['legend']:
                             self.plot.add_legend(ax=self.plot.axes[row][col])
 
@@ -457,13 +463,14 @@ class Session(object):
                         if pdf.name in subplot_pdfs:
                             self.plot_constraint(ax.row, ax.col, pdf=pdf)
 
-    def plot_constraint(self, row=None, col=None, pdf=None, parameters=None):
+    def plot_constraint(self, row=None, col=None, pdf=None, 
+                        parameters=None, limits=None):
         if pdf is None:
             pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
             ax = self.plot.select_subplot(row=row, col=col)
             if len(ax.pdfs) == 0:
-                self.set_up_subplot(ax.row, ax.col, pdf, parameters)
+                self.set_up_subplot(ax.row, ax.col, pdf, parameters, limits)
             if pdf.settings['color'] is None:
                 pdf.set_color()
             n_dim = len(ax.parameters)
@@ -473,17 +480,38 @@ class Session(object):
                 self.plot.plot_2d_pdf(ax, pdf)
             plt.draw()
 
-    def set_up_subplot(self, row, col, pdf, parameters):
+    def set_up_subplot(self, row, col, pdf, parameters, limits):
         ax = self.plot.axes[row][col]
+        ax_settings = self.plot.settings['{0:d}.{1:d}'.format(row, col)]
         if parameters is None:
             ax.parameters = self.choose_parameters(pdf)
         else:
             ax.parameters = parameters
         if len(ax.parameters) > 2:
             print 'Number of parameters must be 1 or 2.'
-            self.set_up_subplot(row, col, pdf, parameters)
-        self.plot.settings['{0:d}.{1:d}'.format(row, col)]['parameters'] = \
-            ax.parameters
+            self.set_up_subplot(row, col, pdf, parameters, limits)
+        ax_settings['parameters'] = ax.parameters
+        if limits is None:
+            x_limits = utils.get_input_float('\nPlot limits for ' + \
+                                                 ax.parameters[0] + \
+                                                 ' (lower upper)?\n> ', num=2)
+        else:
+            x_limits = limits[0]
+        ax.set_xlim(x_limits)
+        ax_settings['x_limits'] = x_limits
+        if len(ax.parameters) == 2:
+            if limits is None:
+                y_limits = utils.get_input_float('\nPlot limits for ' + \
+                                                     ax.parameters[1] + \
+                                                     ' (lower upper)?\n> ', 
+                                                 num=2)
+            else:
+                y_limits = limits[1]
+            ax.set_ylim(y_limits)
+            ax_settings['y_limits'] = y_limits
+
+    def change_limits(self, par_name):
+        pass 
 
     def pdf_exists(self):
         if len(self.pdfs) > 0:
