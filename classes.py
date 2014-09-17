@@ -307,24 +307,29 @@ class Session(object):
         # if chain exists, choose some parameters from there
         # can also add new parameters
         name = raw_input('Label for likelihood?\n> ')
-        m = Menu(options=['Gaussian', 'Inverse Gaussian'], exit_str=None,
+        m = Menu(options=['Flat', 'Gaussian', 'Inverse Gaussian'], 
+                 exit_str=None,
                  header='Choose the form of the likelihood:\n> ')
         m.get_choice()
         form = m.choice
-        if form in ['Gaussian', 'Inverse Gaussian']:
-            parameters = self.choose_parameters(pdf, 
-                                                allow_extra_parameters=True)
-            pdf.add_parameters(parameters)
-            priors = []
-            for p in parameters:
-                if len(pdf.settings['parameters'][p]) != 2:
-                    new_prior = utils.get_input_float( \
-                        'Enter lower and upper limits of the prior on ' + \
-                            p + ':\n> ', num=2)
-                    pdf.settings['parameters'][p] = new_prior
-                    # check that min value < max value
+        parameters = self.choose_parameters(pdf, 
+                                            allow_extra_parameters=True)
+        pdf.add_parameters(parameters)
+        priors = []
+        for p in parameters:
+            if len(pdf.settings['parameters'][p]) != 2:
+                new_prior = utils.get_input_float( \
+                    'Enter lower and upper limits of the prior on ' + \
+                        p + ':\n> ', num=2)
+                pdf.settings['parameters'][p] = new_prior
+                # check that min value < max value
 
-                priors.append(pdf.settings['parameters'][p])
+            priors.append(pdf.settings['parameters'][p])
+
+            lk_dict = {'form': form, 'parameters': parameters, 
+                       'priors': priors}
+
+        if form in ['Gaussian', 'Inverse Gaussian']:
 
             means = utils.get_input_float('Enter mean values:\n> ',
                                           num=len(parameters))
@@ -338,10 +343,10 @@ class Session(object):
                     'Cov(' + parameters[i] + ', ' + parameters[j] + ')?\n> ')[0]
                 covariance[j, i] = covariance[i, j]
             covariance = covariance.tolist()
+            lk_dict['means'] = means
+            lk_dict['covariance'] = covariance
 
-        new_lk = (name, {'form': form, 
-                         'parameters': parameters, 'priors': priors,
-                         'means': means, 'covariance': covariance})
+        new_lk = (name, lk_dict)
 
         # check if name is already in history; if so, replace with new
         for lk in list(self.history['likelihoods']):
@@ -972,7 +977,8 @@ class PostPDF(object):
         else:
             print 'Importance sampling...'
 
-        self.chain.importance_sample(self.likelihoods[name])
+        if kwargs['form'] != 'Flat':
+            self.chain.importance_sample(self.likelihoods[name])
 
         self.add_parameters(kwargs['parameters'])
         self.settings['contour_data_files'] = []
