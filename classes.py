@@ -314,9 +314,22 @@ class Session(object):
         if form in ['Gaussian', 'Inverse Gaussian']:
             parameters = self.choose_parameters(pdf, 
                                                 allow_extra_parameters=True)
-            priors = 
+            pdf.add_parameters(parameters)
+            priors = []
+            for p in parameters:
+                if len(pdf.settings['parameters'][p]) != 2:
+                    new_prior = utils.get_input_float( \
+                        'Enter lower and upper limits of the prior on ' + \
+                            p + ':\n> ', num=2)
+                    pdf.settings['parameters'][p] = new_prior
+                    # check that min value < max value
+
+                priors.append(pdf.settings['parameters'][p])
+
             means = utils.get_input_float('Enter mean values:\n> ',
                                           num=len(parameters))
+            # check whether means are within priors
+
             variances = utils.get_input_float('Enter variances:\n> ',
                                               num=len(parameters))
             covariance = np.diag(variances)
@@ -326,7 +339,8 @@ class Session(object):
                 covariance[j, i] = covariance[i, j]
             covariance = covariance.tolist()
 
-        new_lk = (name, {'form': form, 'parameters': parameters, 
+        new_lk = (name, {'form': form, 
+                         'parameters': parameters, 'priors': priors,
                          'means': means, 'covariance': covariance})
 
         # check if name is already in history; if so, replace with new
@@ -347,7 +361,8 @@ class Session(object):
             parameters = self.choose_parameters(pdf, allow_extra_parameters)
         else:
             extra_parameters = list(np.array(parameters)[np.where([
-                    p not in pdf.parameters for p in parameters])[0]])
+                    p not in pdf.settings['parameters'].keys() \
+                        for p in parameters])[0]])
             if not allow_extra_parameters and len(extra_parameters) > 0:
                 print allow_extra_parameters, len(extra_parameters)>0
                 print 'The PDF ' + pdf.name + \
@@ -906,13 +921,12 @@ class PostPDF(object):
         self.settings = {}
         self.rename(name)
         self.model = model
-        self.parameters = []
         self.chain = None
         self.chain_files = []
         self.likelihoods = {}
-        for attr in ['name', 'model', 'parameters', 
-                     'chain_files']:
+        for attr in ['name', 'model', 'chain_files']:
             self.settings[attr] = getattr(self, attr)
+        self.settings['parameters'] = {}
         self.settings['likelihoods'] = {}
         self.settings['contour_data_files'] = []
         self.settings['color'] = None
@@ -954,9 +968,7 @@ class PostPDF(object):
         # if this is a new PDF, create a "chain" with 
         # random samples within the priors
         if self.chain is None:
-            self.chain = MCMCChain(None, [], 
-                                   parameters=kwargs['parameters'], 
-                                   priors=kwargs['priors'])
+            self.chain = PriorChain(kwargs['parameters'], kwargs['priors'])
         else:
             print 'Importance sampling...'
 
@@ -974,14 +986,14 @@ class PostPDF(object):
 
     def add_parameters(self, new_parameters):
         for p in new_parameters:
-            if p not in self.parameters:
-                self.parameters.append(p)
+            if p not in self.settings['parameters']:
+                self.settings['parameters'][p] = []
 
     def display_parameters(self):
-        print textwrap.fill(', '.join(self.parameters))
+        print textwrap.fill(', '.join(self.settings['parameters'].keys()))
 
     def get_chain_parameter(self, parameter):
-        if parameter not in self.parameters:
+        if parameter not in self.settings['parameters']:
             sys.exit('The PDF ' + self.name + \
                          ' does not have the parameter ' + str(parameter))
         # find the index for the parameter
@@ -1008,7 +1020,7 @@ class PostPDF(object):
                 else:
                     par_indices.append(index[0])
         if len(par_indices) == len(par_names):
-            self.parameters.append(new_name)
+            self.settings['parameters'][new_name] = []
             self.chain.parameters.append(new_name)
             self.chain.column_names.append(new_name)
             new_column = f(\
@@ -1165,6 +1177,27 @@ class MCMCChain(object):
         # check that name is unique
 
         self.name = new_name
+
+
+class PriorChain(MCMCChain):
+
+    def __init__(self, parameters, priors, n_samples=100000):
+        self.rename(None)
+        self.parameters = parameters
+
+        columns = [np.ones(n_samples), np.zeros(n_samples)]
+        for pr in priors:
+            columns.append(np.random.random(n_samples)*(pr[1]-pr[0]) + pr[0])
+        self.samples = np.vstack(columns).T
+
+        self.mult_column = 0
+        self.multiplicity = np.ones(n_samples)
+        self.lnlike_column = 1
+        self.first_par_column = 2
+
+        self.column_names = list(self.parameters)
+        self.column_names.insert(self.mult_column, 'mult')
+        self.column_names.insert(self.lnlike_column, '-ln(L)')
 
 
 class ChainParameter(object):
