@@ -68,8 +68,7 @@ class Session(object):
         reader.close()
         for pdf_name in log_settings['pdfs']:
             d = log_settings['pdfs'][pdf_name]
-            self.set_up_pdf(name=d['name'], model=d['model'])
-            # better?: self.set_up_pdf(settings=d)
+            self.set_up_pdf(settings=d)
             pdf = self.choose_pdf(name=d['name'])
             if 'chain_name' in d:
                 print 'Adding chain: ' + d['chain_name']
@@ -170,16 +169,19 @@ class Session(object):
                     options.append(key)
         return options
 
-    def set_up_pdf(self, name=None, model=None):
-        if name:
+    def set_up_pdf(self, settings=None):
+        if (settings is not None) and \
+                ('name' in settings) and ('model' in settings):
+            name = settings['name']
+            model = settings['model']
             print '\nConstraint name: ' + str(name)
-        else:
-            name = raw_input('\nLabel for constraint?\n> ')
-        if model:
             print 'Model name: ' + str(model)
         else:
+            name = raw_input('\nLabel for constraint?\n> ')
             model = raw_input('Model?\n> ')
         new_pdf = PostPDF(name, model)
+        if settings is not None:
+            new_pdf.settings = settings
         self.pdfs += [new_pdf]
         self.settings['pdfs'][name] = new_pdf.settings
 
@@ -975,9 +977,19 @@ class PostPDF(object):
         if self.chain is None:
             self.chain = PriorChain(kwargs['parameters'], kwargs['priors'])
         else:
-            print 'Importance sampling...'
+            # check if there are extra parameters not in the current chain;
+            # if so, extend the chain using random samples within priors
+            new_parameters = []
+            new_priors = []
+            for p, p_range in zip(kwargs['parameters'], kwargs['priors']):
+                if p not in self.chain.parameters:
+                    new_parameters.append(p)
+                    new_priors.append(p_range)
+            if len(new_parameters) > 0:
+                self.chain.extend(new_parameters, new_priors)
 
         if kwargs['form'] != 'Flat':
+            print 'Importance sampling...'
             self.chain.importance_sample(self.likelihoods[name])
 
         self.add_parameters(kwargs['parameters'])
@@ -991,9 +1003,11 @@ class PostPDF(object):
                                               kwargs['parameters'])
 
     def add_parameters(self, new_parameters):
+        print self.settings['parameters']
         for p in new_parameters:
             if p not in self.settings['parameters']:
                 self.settings['parameters'][p] = []
+        print self.settings['parameters']
 
     def display_parameters(self):
         print textwrap.fill(', '.join(self.settings['parameters'].keys()))
@@ -1178,6 +1192,14 @@ class MCMCChain(object):
                     ': chi squared =', chisq,
                 sys.stdout.flush()
                 print '\r',
+
+    def extend(self, parameters, priors):
+        self.parameters.extend(parameters)
+        n_samples = len(self.multiplicity)
+        columns = []
+        for pr in priors:
+            columns.append(np.random.random(n_samples)*(pr[1]-pr[0]) + pr[0])
+        self.samples = np.vstack([self.samples.T] + columns).T
 
     def rename(self, new_name):
         # check that name is unique
