@@ -11,7 +11,7 @@ import numpy as np
 from scipy import stats
 from sympy import symbols, sympify, lambdify
 import matplotlib
-matplotlib.use('GTKAgg')
+#matplotlib.use('GTKAgg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import default_plot_settings
@@ -972,6 +972,7 @@ class PostPDF(object):
             kwargs['invert'] = True
             self.add_gaussian_likelihood(name, **kwargs)
 
+        
         # if this is a new PDF, create a "chain" with 
         # random samples within the priors
         if self.chain is None:
@@ -994,7 +995,7 @@ class PostPDF(object):
 
         self.add_parameters(kwargs['parameters'])
         self.settings['contour_data_files'] = []
-
+        
     def add_gaussian_likelihood(self, name, **kwargs):
         self.likelihoods[name] = GaussianLikelihood(invert=kwargs['invert'])
         self.likelihoods[name].set_parameter_means( \
@@ -1003,11 +1004,9 @@ class PostPDF(object):
                                               kwargs['parameters'])
 
     def add_parameters(self, new_parameters):
-        print self.settings['parameters']
         for p in new_parameters:
             if p not in self.settings['parameters']:
                 self.settings['parameters'][p] = []
-        print self.settings['parameters']
 
     def display_parameters(self):
         print textwrap.fill(', '.join(self.settings['parameters'].keys()))
@@ -1211,7 +1210,7 @@ class PriorChain(MCMCChain):
 
     def __init__(self, parameters, priors, n_samples=100000):
         self.rename(None)
-        self.parameters = parameters
+        self.parameters = list(parameters)
 
         columns = [np.ones(n_samples), np.zeros(n_samples)]
         for pr in priors:
