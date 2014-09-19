@@ -78,11 +78,6 @@ class Session(object):
                         self.history['chains'].remove(chain)
                 self.history['chains'].append((d['chain_name'],
                                                d['chain_files']))
-            for p in d['derived_parameters']:
-                p_dict = d['derived_parameters'][p]
-                pdf.add_derived_parameter(p, p_dict['function'],
-                                          p_dict['parameters'],
-                                          p_dict['indices'])
             if 'likelihoods' in d:
                 for lk in d['likelihoods']:
                     print 'Adding likelihood: ' + lk
@@ -92,6 +87,11 @@ class Session(object):
                             self.history['likelihoods'].remove(hist_lk)
                     self.history['likelihoods'].append( \
                         (lk, d['likelihoods'][lk]))
+            for p in d['derived_parameters']:
+                p_dict = d['derived_parameters'][p]
+                pdf.add_derived_parameter(p, p_dict['function'],
+                                          p_dict['parameters'],
+                                          p_dict['indices'])
             if 'contour_data_files' in d:
                 pdf.settings['contour_data_files'] = d['contour_data_files']
             if ('color' in d) and (d['color'] is not None):
@@ -322,8 +322,7 @@ class Session(object):
                  header='Choose the form of the likelihood:\n> ')
         m.get_choice()
         form = m.choice
-        parameters = self.choose_parameters(pdf, 
-                                            allow_extra_parameters=True)
+        parameters = pdf.choose_parameters(allow_extra_parameters=True)
         pdf.add_parameters(parameters)
         priors = []
         for p in parameters:
@@ -366,27 +365,6 @@ class Session(object):
         self.history['likelihoods'].append(new_lk)
         return new_lk
 
-    def choose_parameters(self, pdf, allow_extra_parameters=False):
-        # choose one or more parameters 
-        # (enter names or pick from chain column list)
-        print '\nEnter one or more parameter names (on one line),'
-        print 'or press Enter to see a list of available parameters:'
-        parameters = raw_input('> ').split()
-        if len(parameters) == 0:
-            pdf.display_parameters()
-            parameters = self.choose_parameters(pdf, allow_extra_parameters)
-        else:
-            extra_parameters = list(np.array(parameters)[np.where([
-                    p not in pdf.settings['parameters'].keys() \
-                        for p in parameters])[0]])
-            if not allow_extra_parameters and len(extra_parameters) > 0:
-                print allow_extra_parameters, len(extra_parameters)>0
-                print 'The PDF ' + pdf.name + \
-                    ' does not have the following parameters:'
-                print ', '.join(extra_parameters)
-                parameters = self.choose_parameters(pdf)
-        return parameters
-
     def add_derived_parameter(self):
         # how does this work with likelihoods without a chain?
         # add option to add parameter to all chains?
@@ -407,7 +385,7 @@ class Session(object):
     def compute_1d_stats(self):
         pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
-            parameters = self.choose_parameters(pdf)
+            parameters = pdf.choose_parameters()
             pdf.compute_1d_stats(parameters)
 
     def set_up_plot(self, settings=None):
@@ -516,7 +494,7 @@ class Session(object):
         ax = self.plot.axes[row][col]
         ax_settings = self.plot.settings['{0:d}.{1:d}'.format(row, col)]
         if parameters is None:
-            ax.parameters = self.choose_parameters(pdf)
+            ax.parameters = pdf.choose_parameters()
         else:
             ax.parameters = parameters
         if len(ax.parameters) > 2:
@@ -961,11 +939,49 @@ class PostPDF(object):
 
         self.chain_files.extend(files)
         self.settings['chain_name'] = name
-        self.chain = MCMCChain(name, files)
 
-        # if likelihood already included in constraint
-        # when chain is added, need to check whether likelihood parameters
-        # are also in the chain; also importance sample
+        new_chain = MCMCChain(name, files)
+        chain_parameters = new_chain.parameters
+
+        # if likelihood(s) already included in constraint
+        # when chain is added, check whether likelihood parameters
+        # are also in the chain (if so, rename chain parameters)
+        if len(self.settings['parameters']) > 0:
+            print '\nChain parameters:'
+            new_chain.display_parameters()
+            print '\nList any of the currently defined parameters ' + \
+                'for this constraint that are also chain parameters.'
+            overlap_parameters = self.choose_parameters()
+            extra_parameters = list(set(self.settings['parameters']). \
+                                        difference(set(overlap_parameters)))
+            for p in overlap_parameters:
+                m = Menu(options=new_chain.parameters, exit_str=None,
+                         header='Which chain parameter corresponds to ' + \
+                             p + '?')
+                m.get_choice()
+                new_chain.parameters[new_chain.parameters.index(m.choice)] = p
+
+            self.chain = new_chain
+
+            # add extra parameters defined in likelihoods
+            self.chain.extend(extra_parameters, 
+                              [self.settings['parameters'][p] for \
+                                   p in extra_parameters])
+
+            # recompute derived parameters
+            derived = self.settings['derived_parameters']
+            for p in derived:
+                self.add_derived_parameter(p, derived[p]['function'],
+                                           derived[p]['parameters'],
+                                           derived[p]['indices'])
+        
+            # importance sample
+            for lk in self.likelihoods:
+                if self.settings['likelihoods'][lk]['form'] != 'Flat':
+                    self.chain.importance_sample(self.likelihoods[lk])
+
+        else:
+            self.chain = new_chain
 
         self.add_parameters(self.chain.parameters)
         self.settings['contour_data_files'] = []
@@ -980,7 +996,6 @@ class PostPDF(object):
         elif kwargs['form'] == 'Inverse Gaussian':
             kwargs['invert'] = True
             self.add_gaussian_likelihood(name, **kwargs)
-
         
         # if this is a new PDF, create a "chain" with 
         # random samples within the priors
@@ -1022,6 +1037,27 @@ class PostPDF(object):
     def display_parameters(self):
         print textwrap.fill(', '.join(self.settings['parameters'].keys()))
 
+    def choose_parameters(self, allow_extra_parameters=False):
+        # choose one or more parameters 
+        # (enter names or pick from chain column list)
+        print '\nEnter one or more parameter names (on one line),'
+        print 'or press Enter to see a list of available parameters:'
+        parameters = raw_input('> ').split()
+        if len(parameters) == 0:
+            self.display_parameters()
+            parameters = self.choose_parameters(allow_extra_parameters)
+        else:
+            extra_parameters = list(np.array(parameters)[np.where([
+                    p not in self.settings['parameters'].keys() \
+                        for p in parameters])[0]])
+            if not allow_extra_parameters and len(extra_parameters) > 0:
+                print allow_extra_parameters, len(extra_parameters)>0
+                print 'The constraint ' + self.name + \
+                    ' does not have the following parameters:'
+                print ', '.join(extra_parameters)
+                parameters = self.choose_parameters()
+        return parameters
+
     def get_chain_parameter(self, parameter):
         if parameter not in self.settings['parameters']:
             sys.exit('The PDF ' + self.name + \
@@ -1035,6 +1071,12 @@ class PostPDF(object):
                               par_indices=None):
         # only works for simple parameter combinations - what about
         # more complicated functions like D_A(z)?
+        #
+        # also assumes that if there are multiple derived parameters,
+        # the order they're added in doesn't matter, i.e. 
+        # a derived parameter should not be defined in terms of 
+        # other derived parameters
+        #
         f = lambdify(symbols([str(x) for x in par_names]), 
                      sympify(f_str), 'numpy')
         # handle errors from the sympy operations
@@ -1173,6 +1215,9 @@ class MCMCChain(object):
             # remove trailing * used to denote derived parameters
             parameters.append( line.strip().split()[0].split('*')[0] )
         return parameters
+
+    def display_parameters(self):
+        print textwrap.fill(', '.join(self.parameters))
 
     def thin(self, thinning_factor):
         # would be more accurate to account for varying multiplicities
