@@ -323,10 +323,11 @@ class Session(object):
                 new_prior = utils.get_input_float( \
                     'Enter lower and upper limits of the prior on ' + \
                         p + ':\n> ', num=2)
-                pdf.settings['parameters'][p] = new_prior
                 # check that min value < max value
 
-            priors.append(pdf.settings['parameters'][p])
+                priors.append(new_prior)
+            else:
+                priors.append(pdf.settings['parameters'][p])
 
             lk_dict = {'form': form, 'parameters': parameters, 
                        'priors': priors}
@@ -994,6 +995,8 @@ class PostPDF(object):
             self.chain.importance_sample(self.likelihoods[name])
 
         self.add_parameters(kwargs['parameters'])
+        for p, p_range in zip(kwargs['parameters'], kwargs['priors']):
+            self.settings['parameters'][p] = p_range
         self.settings['contour_data_files'] = []
         
     def add_gaussian_likelihood(self, name, **kwargs):
