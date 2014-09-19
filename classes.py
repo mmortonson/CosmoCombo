@@ -323,9 +323,7 @@ class Session(object):
                 new_prior = utils.get_input_float( \
                     'Enter lower and upper limits of the prior on ' + \
                         p + ':\n> ', num=2)
-                # check that min value < max value
-
-                priors.append(new_prior)
+                priors.append(sorted(new_prior))
             else:
                 priors.append(pdf.settings['parameters'][p])
 
@@ -336,8 +334,10 @@ class Session(object):
 
             means = utils.get_input_float('Enter mean values:\n> ',
                                           num=len(parameters))
-            # check whether means are within priors
-
+            for p, p_range, mean in zip(parameters, priors, means):
+                if mean < p_range[0] or mean > p_range[1]:
+                    print 'Warning: mean value for ' + p + \
+                      ' is outside the prior.'
             variances = utils.get_input_float('Enter variances:\n> ',
                                               num=len(parameters))
             covariance = np.diag(variances)
