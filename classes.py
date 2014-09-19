@@ -132,6 +132,14 @@ class Session(object):
         else:
             self.history = {'chains': [], 'likelihoods': []}
 
+    def delete_history(self):
+        m = Menu(options=['Likelihoods', 'Chains', 'All'], exit_str='Cancel')
+        m.get_choice()
+        if m.choice == 'Likelihoods' or m.choice == 'All':
+            self.history['likelihoods'] = []
+        if m.choice == 'Chains' or m.choice == 'All':
+            self.history['chains'] = []
+
     def save_log(self, filename=None):
         if filename is None:
             filename = self.log_file

@@ -67,7 +67,10 @@ options = (('Set up new joint constraint',
              'condition': session.plot_exists}),
            ('Save plot',
             {'action': session.save_plot,
-             'condition': session.plot_exists}))
+             'condition': session.plot_exists}),
+           ('Delete session history',
+            {'action': session.delete_history,
+             'condition': lambda: True}))
 
 session.start_interactive(options=OrderedDict(options))
 
