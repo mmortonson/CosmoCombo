@@ -378,10 +378,9 @@ class Session(object):
             name = raw_input('\nName of the new parameter?\n> ')
             # check that this is a new name
 
-            par_names = raw_input('\nExisting parameters required to ' + \
-                                      'compute the new parameter?\n' + \
-                                      '(all on one line, separated ' + \
-                                      'by spaces)\n> ').split()
+            print '\nExisting parameters required to ' + \
+                'compute the new parameter?'
+            par_names = pdf.choose_parameters()
             f_str = raw_input('\nEnter the function to use for the new ' + \
                                   'parameter,\nusing the existing ' + \
                                   'parameter names and standard functions:\n> ')
@@ -938,6 +937,7 @@ class PostPDF(object):
         else:
             return False
 
+    # break up into more functions
     def add_chain(self, name, files, update_order=True):
         # check if already have chain, if files exist, if name is unique
 
@@ -945,31 +945,54 @@ class PostPDF(object):
 
         self.chain_files.extend(files)
         self.settings['chain_name'] = name
+        self.settings['chain_files'] = self.chain_files
         self.chain = MCMCChain(name, files)
 
         for pdf_element in self.settings['order']:
-            if pdf_element[0] == 'likelihood':
+            if pdf_element[0] == 'chain':
+                # only add likelihoods and/or derived parameters
+                # that come before the chain
+                break
+            elif pdf_element[0] == 'likelihood':
                 lk_name = pdf_element[1]
                 lk_settings = self.settings['likelihoods'][lk_name]
                 lk_parameters = lk_settings['parameters']
-                lk_priors = lk_settings['priors']
-                # if likelihood(s) already included in constraint
-                # when chain is added, check whether likelihood parameters
-                # are also in the chain (if so, rename chain parameters)
-                print '\nList any parameters of the likelihood ' + lk_name + \
-                    ' that are also in the chain.\nCurrent chain parameters:'
-                self.chain.display_parameters()
-                overlap_parameters = self.choose_parameters( \
-                    options=lk_parameters)
-                extra_parameters = list(set(lk_parameters). \
-                                            difference(set(overlap_parameters)))
-                for p in overlap_parameters:
-                    m = Menu(options=self.chain.parameters, exit_str=None,
-                             header='Which chain parameter corresponds to ' + \
-                                 p + '?')
-                    m.get_choice()
-                    self.chain.parameters[ \
-                        self.chain.parameters.index(m.choice)] = p
+                lk_priors = lk_settings['priors']                    
+                if lk_name not in self.likelihoods:
+                    self.add_likelihood(lk_name, update_order=False,
+                                        **lk_settings)
+                    # if likelihood(s) already included in constraint
+                    # when chain is added, check if likelihood parameters
+                    # are also in the chain (if so, rename chain parameters)
+                extra_parameters = []
+                lk_chain_parameters = []
+                for i, p in enumerate(lk_parameters):
+                    if 'chain_parameters' in lk_settings:
+                        if lk_settings['chain_parameters'][i] is None:
+                            extra_parameters.append(p)
+                        else:
+                            self.chain.parameters[ \
+                                self.chain.parameters.index( \
+                                    lk_settings['chain_parameters'][i])] = p
+                    else:
+                        m = Menu(options=self.chain.parameters, 
+                                 exit_str='New',
+                                 header='If the parameter ' + p + \
+                                     ' from likelihood ' + lk_name + \
+                                     '\nis in the chain, select the ' + \
+                                     'corresponding parameter;\n' + \
+                                     'otherwise choose "New":')
+                        m.get_choice()
+                        if m.choice == m.exit:
+                            extra_parameters.append(m.choice)
+                            lk_chain_parameters.append(None)
+                        else:
+                            self.chain.parameters[ \
+                                self.chain.parameters.index(m.choice)] = p
+                            lk_chain_parameters.append(m.choice)
+                if 'chain_parameters' not in lk_settings:
+                    lk_settings['chain_parameters'] = \
+                        list(lk_chain_parameters)
                 # add extra parameters defined in likelihoods
                 self.chain.extend(extra_parameters, 
                                   [lk_priors[lk_parameters.index(p)] for \
@@ -978,24 +1001,37 @@ class PostPDF(object):
                 if lk_settings['form'] != 'Flat':
                     self.chain.importance_sample(self.likelihoods[lk_name])
 
+            # recompute derived parameters if necessary
             elif pdf_element[0] == 'derived_parameter':
                 par_name = pdf_element[1]
-                m = Menu(options=self.chain.parameters, exit_str='New',
-                         header='If the derived parameter ' + par_name + \
-                             ' is in the chain, select the corresponding ' + \
-                             'parameter;\notherwise choose "New":')
-                m.get_choice()
-                if m.choice == m.exit:
-                    # recompute derived parameters
-                    par_settings = self.settings['derived_parameters'][par_name]
-                    self.add_derived_parameter(par_name, 
-                                               par_settings['function'],
-                                               par_settings['parameters'],
-                                               par_settings['indices'], 
-                                               new=False)
+                par_settings = self.settings['derived_parameters'][par_name]
+                if 'chain_parameter' in par_settings:
+                    if par_settings['chain_parameter'] is None:
+                        self.add_derived_parameter( \
+                            par_name, par_settings['function'],
+                            par_settings['parameters'], update_order=False)
+                    else:
+                        self.chain.parameters[ \
+                            self.chain.parameters.index( \
+                                par_settings['chain_parameter'])] = par_name
                 else:
-                    self.chain.parameters[ \
-                        self.chain.parameters.index(m.choice)] = par_name
+                    m = Menu(options=self.chain.parameters, exit_str='New',
+                             header='If the derived parameter ' + \
+                                 par_name + \
+                                 ' is in the chain,\n' + \
+                                 'select the corresponding ' + \
+                                 'parameter;\notherwise choose "New":')
+                    m.get_choice()
+                    if m.choice == m.exit:
+                        self.add_derived_parameter( \
+                            par_name, par_settings['function'],
+                            par_settings['parameters'], update_order=False)
+                        par_settings['chain_parameter'] = None
+                    else:
+                        self.chain.parameters[ \
+                            self.chain.parameters.index(m.choice)] = \
+                            par_name
+                        par_settings['chain_parameter'] = m.choice
 
         self.add_parameters(self.chain.parameters)
         self.settings['contour_data_files'] = []
@@ -1052,42 +1088,56 @@ class PostPDF(object):
             if p not in self.settings['parameters']:
                 self.settings['parameters'][p] = []
 
-    def display_parameters(self):
-        print textwrap.fill(', '.join(self.settings['parameters'].keys()))
+    def display_parameters(self, parameters=None):
+        if parameters is None:
+            parameters = self.settings['parameters'].keys()
+        print textwrap.fill(', '.join(parameters))
 
-    def choose_parameters(self, options=None, allow_extra_parameters=False):
+    def choose_parameters(self, options=None, num=None,
+                          allow_extra_parameters=False):
         if options is None:
             options = list(self.settings['parameters'].keys())
         # choose one or more parameters 
         # (enter names or pick from chain column list)
-        print '\nEnter one or more parameter names (on one line),'
+        if num is None:
+            print '\nEnter one or more parameter names (on one line),'
+        elif num == 1:
+            print '\nEnter a parameter name,'
+        else:
+            print '\nEnter ' + str(num) + ' parameter names (on one line),'
         print 'or press Enter to see a list of available parameters:'
         parameters = raw_input('> ').split()
         if len(parameters) == 0:
-            self.display_parameters()
-            parameters = self.choose_parameters(options, allow_extra_parameters)
+            self.display_parameters(options)
+            parameters = self.choose_parameters(options, num,
+                                                allow_extra_parameters)
+        elif num is not None and len(parameters) != num:
+            print 'Wrong number of parameters.'
+            parameters = self.choose_parameters(options, num,
+                                                allow_extra_parameters)
         else:
             extra_parameters = list(np.array(parameters)[ \
                     np.where([p not in options for p in parameters])[0]])
             if not allow_extra_parameters and len(extra_parameters) > 0:
-                print allow_extra_parameters, len(extra_parameters)>0
-                print 'The constraint ' + self.name + \
+                print '\nThe constraint ' + self.name + \
                     ' does not have the following parameters:'
                 print ', '.join(extra_parameters)
-                parameters = self.choose_parameters(options)
+                parameters = self.choose_parameters(options, num)
         return parameters
 
     def get_chain_parameter(self, parameter):
         if parameter not in self.settings['parameters']:
-            sys.exit('The PDF ' + self.name + \
-                         ' does not have the parameter ' + str(parameter))
+            print '\nThe constraint ' + self.name + \
+                ' does not have the parameter ' + str(parameter) + '.'
+            print 'Choose a parameter to use instead.'
+            parameter = self.choose_parameters(num=1)[0]
         # find the index for the parameter
         index = np.where(np.array(self.chain.parameters) == parameter)[0][0]
         # create a ChainParameter object for each parameter
         return ChainParameter(self.chain, index)
 
     def add_derived_parameter(self, new_name, f_str, par_names, 
-                              par_indices=None, new=True, update_order=True):
+                              par_indices=None, update_order=True):
         # only works for simple parameter combinations - what about
         # more complicated functions like D_A(z)?
 
@@ -1113,11 +1163,10 @@ class PostPDF(object):
                       for i in par_indices])
             self.chain.samples = np.hstack((self.chain.samples, 
                                       np.array([new_column]).T))
-            if new:
+            if update_order:
                 self.settings['parameters'][new_name] = []
-                if update_order:
-                    self.settings['order'].append(('derived_parameter', 
-                                                   new_name))
+                self.settings['order'].append(('derived_parameter', 
+                                               new_name))
                 self.settings['derived_parameters'][new_name] = {
                     'function': f_str,
                     'parameters': par_names,
