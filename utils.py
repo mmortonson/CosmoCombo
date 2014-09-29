@@ -67,8 +67,8 @@ def get_input_integer(prompt, num=1,
     return values
 
 def get_input_float(prompt, num=1, 
-                      error_text='Input must be floats.',
-                      error_action='retry'):
+                    error_text='Input must be floats.',
+                    error_action='retry'):
     values = []
     success = True
     user_input = raw_input(prompt).split()

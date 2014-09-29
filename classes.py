@@ -74,12 +74,23 @@ class Session(object):
                 if pdf_element[0] == 'chain':
                     print 'Adding chain: ' + d['chain_name']
                     pdf.add_chain(d['chain_name'], d['chain_files'],
+                                  d['chain_burn_in'], d['chain_mult_column'],
+                                  d['chain_lnlike_column'],
+                                  d['chain_first_par_column'],
+                                  d['chain_paramname_file'],
+                                  d['chain_params_in_header'],
                                   update_order=False)
                     for chain in list(self.history['chains']):
                         if chain[0] == d['chain_name']:
                             self.history['chains'].remove(chain)
                     self.history['chains'].append((d['chain_name'],
-                                                   d['chain_files']))
+                                                   d['chain_files'],
+                                                   d['chain_burn_in'], 
+                                                   d['chain_mult_column'],
+                                                   d['chain_lnlike_column'],
+                                                   d['chain_first_par_column'],
+                                                   d['chain_paramname_file'],
+                                                   d['chain_params_in_header']))
                 elif pdf_element[0] == 'likelihood':
                     lk = pdf_element[1]
                     print 'Adding likelihood: ' + lk
@@ -286,12 +297,38 @@ class Session(object):
         for f in raw_input('\nChain file names?\n> ').split():
             files += glob.glob(f)
         name = raw_input('Label for chain?\n> ')
+        burn_in = utils.get_input_float( \
+            'Burn-in fraction or number of samples?\n> ')[0]
+        mult_column = utils.get_input_integer( \
+            'Multiplicity column? (Enter -1 if none.)\n> ')[0]
+        if mult_column < 0:
+            mult_column = None
+        lnlike_column = utils.get_input_integer( \
+            'Log likelihood column? (Enter -1 if none.)\n> ')[0]
+        if lnlike_column < 0:
+            lnlik_column = None
+        first_par_column = utils.get_input_integer( \
+            'Column of first chain parameter?\n> ')[0]
+        m = Menu(options=['File named as chain label + .paramnames',
+                          'Different file',
+                          'Header of chain files'],
+                 header='Where are the chain parameter names?')
+        m.get_choice()
+        paramname_file = None
+        params_in_header = False
+        if m.i_choice == 1:
+            paramname_file = raw_input('Enter file name:\n> ')
+        elif m.i_choice == 2:
+            params_in_header = True
+        chain_settings = (name, files, burn_in, 
+                          mult_column, lnlike_column, first_par_column,
+                          paramname_file, params_in_header)
         # check if name is already in history; if so, replace with new
         for chain in list(self.history['chains']):
             if chain[0] == name:
                 self.history['chains'].remove(chain)
-        self.history['chains'].append((name, files))
-        return (name, files)
+        self.history['chains'].append(chain_settings)
+        return chain_settings
 
     # merge with add_chain?
     def add_likelihood(self):
@@ -939,7 +976,10 @@ class PostPDF(object):
             return False
 
     # break up into more functions
-    def add_chain(self, name, files, update_order=True):
+    def add_chain(self, name, files, burn_in=None, 
+                  mult_column=0, lnlike_column=1, first_par_column=2,
+                  paramname_file=None, params_in_header=False,
+                  update_order=True):
         # check if already have chain, if files exist, if name is unique
 
         # check if model is consistent?
@@ -947,7 +987,15 @@ class PostPDF(object):
         self.chain_files.extend(files)
         self.settings['chain_name'] = name
         self.settings['chain_files'] = self.chain_files
-        self.chain = MCMCChain(name, files)
+        self.settings['chain_burn_in'] = burn_in
+        self.settings['chain_mult_column'] = mult_column
+        self.settings['chain_lnlike_column'] = lnlike_column
+        self.settings['chain_first_par_column'] = first_par_column
+        self.settings['chain_paramname_file'] = paramname_file
+        self.settings['chain_params_in_header'] = params_in_header
+        self.chain = MCMCChain(name, files, burn_in, 
+                               mult_column, lnlike_column, first_par_column,
+                               paramname_file, params_in_header)
 
         for pdf_element in self.settings['order']:
             if pdf_element[0] == 'chain':
@@ -1248,10 +1296,11 @@ class PostPDF(object):
 
 class MCMCChain(object):
 
-    def __init__(self, name, chain_files, 
+    def __init__(self, name, chain_files, burn_in=None,
                  mult_column=0, lnlike_column=1, first_par_column=2,
-                 paramname_file=None):
+                 paramname_file=None, params_in_header=False):
         self.rename(name)
+        self.chain_files = chain_files
         first_file = True
         for chain_file in chain_files:
             # does this raise an error if the file doesn't exist???
@@ -1267,29 +1316,59 @@ class MCMCChain(object):
 
                 self.samples = np.vstack((self.samples, new_samples))
         self.mult_column = mult_column
-        self.multiplicity = self.samples[:,mult_column]
+        if mult_column is None:
+            self.multiplicity = np.ones(len(self.samples))
+        else:
+            self.multiplicity = self.samples[:,mult_column]
         self.lnlike_column = lnlike_column
         self.first_par_column = first_par_column
-        if paramname_file is None:
+        if (paramname_file is None) and (not params_in_header):
             paramname_file = '_'.join(chain_files[0].split('_')[:-1]) + \
                 '.paramnames'
-        self.parameters = self.get_parameter_names(paramname_file)
+        self.parameters = self.get_parameter_names(paramname_file, 
+                                                   params_in_header)
         self.column_names = list(self.parameters)
-        self.column_names.insert(mult_column, 'mult')
-        self.column_names.insert(lnlike_column, '-ln(L)')
+        if mult_column is not None:
+            self.column_names.insert(mult_column, 'mult')
+        if lnlike_column is not None:
+            self.column_names.insert(lnlike_column, '-ln(L)')
+        self.burn_in = burn_in
+        if burn_in is not None:
+            self.remove_burn_in_samples()
 
-    def get_parameter_names(self, paramname_file):
-        paramname_reader = utils.open_if_exists(paramname_file, 'r')
-        lines = paramname_reader.readlines()
-        paramname_reader.close()
-        parameters = []
-        for line in lines:
-            # remove trailing * used to denote derived parameters
-            parameters.append( line.strip().split()[0].split('*')[0] )
+    def get_parameter_names(self, paramname_file, params_in_header=False):
+        if (paramname_file is None) and params_in_header:
+            reader = utils.open_if_exists(self.chain_files[0], 'r')
+            parameters = reader.readline().strip('#').split()
+            reader.close()
+        else:
+            paramname_reader = utils.open_if_exists(paramname_file, 'r')
+            lines = paramname_reader.readlines()
+            paramname_reader.close()
+            parameters = []
+            for line in lines:
+                # remove trailing * used to denote derived parameters
+                parameters.append( line.strip().split()[0].split('*')[0] )
         return parameters
 
     def display_parameters(self):
         print textwrap.fill(', '.join(self.parameters))
+
+    def remove_burn_in_samples(self):
+        if 0. < self.burn_in < 1.:
+            n_burn = self.burn_in * np.sum(self.multiplicity)
+        elif self.burn_in >= 1.:
+            n_burn = int(self.burn_in)
+        else:
+            print 'Invalid burn-in value: ', self.burn_in
+            print 'Using full chain.'
+        # delta is negative for samples to be removed;
+        # 1st positive value is the multiplicity for the 1st retained sample
+        delta = np.cumsum(self.multiplicity) - n_burn
+        burn_index = np.where(delta > 0)[0][0]
+        self.samples = self.samples[burn_index:,:]
+        self.multiplicity = self.multiplicity[burn_index:]
+        self.multiplicity[0] = delta[burn_index]
 
     def thin(self, thinning_factor):
         # would be more accurate to account for varying multiplicities
