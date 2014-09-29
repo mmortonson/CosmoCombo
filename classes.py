@@ -812,7 +812,8 @@ class Plot(object):
                     set_pdfs[p]['layer'] -= 1
             set_pdfs[pdf.name]['layer'] = layer
 
-        contour_data = pdf.load_contour_data(n_samples, grid_size, smoothing, 
+        contour_data = pdf.load_contour_data(ax.parameters, n_samples, 
+                                             grid_size, smoothing, 
                                              contour_pct)
         if contour_data is None:
 
@@ -854,8 +855,8 @@ class Plot(object):
                 contour_levels.append(stats.scoreatpercentile(pdf_values, 
                                                               100.0-cl))
         
-            pdf.save_contour_data(n_samples, grid_size, smoothing, 
-                                  contour_pct, contour_levels,
+            pdf.save_contour_data(ax.parameters, n_samples, grid_size, 
+                                  smoothing, contour_pct, contour_levels,
                                   X_2d, Y_2d, Z_2d)
 
         else:
@@ -1180,12 +1181,13 @@ class PostPDF(object):
             fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
             print fmt_str.format(p, cp.mean(), cp.standard_deviation())
 
-    def save_contour_data(self, n_samples, grid_size, smoothing, 
+    def save_contour_data(self, parameters, n_samples, grid_size, smoothing, 
                           contour_pct, contour_levels, X, Y, Z):
         filename = os.path.join('Data', time.strftime('%Y-%m-%d'), 
                                 time.strftime('%Z.%H.%M.%S') + '_contour.txt')
         writer = utils.open_with_path(filename, 'w')
-        header = str(n_samples) + ' # n_samples\n' + \
+        header = ' '.join(parameters) + ' # parameters\n' + \
+            str(n_samples) + ' # n_samples\n' + \
             str(grid_size[0]) + ' ' + str(grid_size[1]) + ' # grid_size\n' + \
             str(smoothing) + ' # smoothing\n' + \
             ' '.join([str(cp) for cp in contour_pct]) + ' # contour_pct\n' + \
@@ -1197,10 +1199,12 @@ class PostPDF(object):
         writer.close()
         self.settings['contour_data_files'].append(filename)
 
-    def load_contour_data(self, n_samples, grid_size, smoothing, contour_pct):
+    def load_contour_data(self, parameters, n_samples, grid_size, 
+                          smoothing, contour_pct):
         contour_data = None
         for f in self.settings['contour_data_files']:
             reader = utils.open_if_exists(f, 'r')
+            test_parameters = reader.readline().split('#')[0].split()
             test_n_samples = int(float(reader.readline().split('#')[0]))
             test_grid_size = [int(float(x)) for x in \
                                   reader.readline().split('#')[0].split()]
@@ -1208,7 +1212,8 @@ class PostPDF(object):
             test_contour_pct = [float(x) for x in \
                                   reader.readline().split('#')[0].split()]
 
-            match = (test_n_samples == n_samples) and \
+            match = (test_parameters == parameters) and \
+                (test_n_samples == n_samples) and \
                 np.all([x == y for x, y in \
                             zip(test_grid_size, grid_size)]) and \
                 test_smoothing == smoothing and \
