@@ -418,9 +418,16 @@ class Session(object):
             print '\nExisting parameters required to ' + \
                 'compute the new parameter?'
             par_names = pdf.choose_parameters()
-            f_str = raw_input('\nEnter the function to use for the new ' + \
-                                  'parameter,\nusing the existing ' + \
-                                  'parameter names and standard functions:\n> ')
+            f_str = ''
+            while f_str == '':
+                f_str = raw_input('\nEnter the function to use for the new' + \
+                                      ' parameter,\nusing the existing ' + \
+                                      'parameter names, standard functions,' + \
+                                      ' and\npredefined cosmology functions' + \
+                                      ' (press Enter to see a list):\n> ')
+                if f_str == '':
+                    print 'Available cosmology functions:'
+
             pdf.add_derived_parameter(name, f_str, par_names)
 
     def compute_1d_stats(self):
