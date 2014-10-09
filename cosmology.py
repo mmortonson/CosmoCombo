@@ -30,22 +30,7 @@ import subprocess
 import StringIO
 
 from constants import *
-
-
-# !!!!! move this to another module
-def check_ranges(name, par):
-    """ Check that parameters are within certain ranges.
-          name: string used in the assert message to identify the problem
-          par: dictionary of parameters
-               - keys are strings with parameter names
-               - values are 3-element lists [x, min, max]
-                 for min <= x <= max
-    """
-    s = ': {0:s}={1:g} is not in the range ({2:g}, {3:g})'
-    for p in par:
-        assert par[p][1] <= par[p][0] <= par[p][2], \
-               name + s.format(p, par[p][0], par[p][1], par[p][2])
-
+import utils
 
 
 class BaseModel(object):
@@ -238,15 +223,15 @@ class BaseModel(object):
         """ Use Cosmic Emulator v2.0 (a.k.a. FrankenEmu; 
             see Heitmann et al. 2013) to compute nonlinear P(k).
         """
-        check_ranges('cosmicemu', \
-                     {'z': [z, 0, 4], \
-                      'Omega_b*h**2': [self.omegabhh, 0.0215, 0.0235], \
-                      'Omega_m*h**2': [self.omegamhh, 0.120, 0.155], \
-                      'n_s': [self.ns, 0.85, 1.05], \
-                      'h': [self.h, 0.55, 0.85], \
-                      'w': [self.w, -1.3, -0.7], \
-                      'sigma_8': [self.sigma8, 0.61, 0.9]
-                     })
+        utils.check_ranges('cosmicemu',
+                           {'z': [z, 0, 4],
+                            'Omega_b*h**2': [self.omegabhh, 0.0215, 0.0235],
+                            'Omega_m*h**2': [self.omegamhh, 0.120, 0.155],
+                            'n_s': [self.ns, 0.85, 1.05],
+                            'h': [self.h, 0.55, 0.85],
+                            'w': [self.w, -1.3, -0.7],
+                            'sigma_8': [self.sigma8, 0.61, 0.9]
+                            })
         path = '/home/mmortonson/Code/CosmicEmu_v2.0'
         k = []
         p = []

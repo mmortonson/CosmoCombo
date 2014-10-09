@@ -91,6 +91,21 @@ def get_input_float(prompt, num=1,
             sys.exit()
     return values
 
+def check_ranges(name, par):
+    """
+    Check that parameters are within certain ranges.
+
+    name: string used in the error message to identify the problem
+    par: dictionary of parameters
+        - keys are strings with parameter names
+        - values are 3-element lists [x, min, max]
+          for min <= x <= max
+    """
+    s = ': {0:s}={1:g} is not in the range ({2:g}, {3:g})'
+    for p in par:
+        if not (par[p][1] <= par[p][0] <= par[p][2]):
+            sys.exit(name + s.format(p, par[p][0], par[p][1], par[p][2]))
+
 def color_gradient(rgb_tuple, num):
     colors = [rgb_tuple]
     for i in range(1, num):
