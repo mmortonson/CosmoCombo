@@ -28,9 +28,25 @@ from scipy import interpolate
 
 import subprocess
 import StringIO
+from collections import OrderedDict
 
 from constants import *
 import utils
+
+
+model_class = None
+parameters = []
+
+def DV_Mpc(z, *values):
+    m = model_class(**dict(zip(parameters, values)))
+    return m.dv_bao(z)*C_HUB_MPC
+
+def rs_Mpc(*values):
+    m = model_class(**dict(zip(parameters, values)))
+    return m.sound_horizon_drag_anderson13()
+
+functions = {'DV_Mpc': np.vectorize(DV_Mpc),
+             'rs_Mpc': np.vectorize(rs_Mpc)}
 
 
 class BaseModel(object):

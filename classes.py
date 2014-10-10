@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import default_plot_settings
 import utils
+import cosmology
 
 class Session(object):
 
@@ -203,7 +204,10 @@ class Session(object):
             print 'Model name: ' + str(model)
         else:
             name = raw_input('\nLabel for constraint?\n> ')
-            model = raw_input('Model?\n> ')
+            m = Menu(options=['LCDM'], exit_str=None,
+                     header='Choose a model class:')
+            m.get_choice()
+            model = m.choice
         new_pdf = PostPDF(name, model)
         if settings is not None:
             new_pdf.settings = settings
@@ -427,7 +431,7 @@ class Session(object):
                                       ' (press Enter to see a list):\n> ')
                 if f_str == '':
                     print 'Available cosmology functions:'
-
+                    print cosmology.functions.keys()
             pdf.add_derived_parameter(name, f_str, par_names)
 
     def compute_1d_stats(self):
@@ -967,6 +971,7 @@ class PostPDF(object):
         self.chain = None
         self.chain_files = []
         self.likelihoods = {}
+        self.cosmology_parameter_samples = []
         for attr in ['name', 'model', 'chain_files']:
             self.settings[attr] = getattr(self, attr)
         self.settings['parameters'] = {}
@@ -975,6 +980,7 @@ class PostPDF(object):
         self.settings['color'] = None
         self.settings['derived_parameters'] = {}
         self.settings['order'] = []
+        self.settings['chain_to_cosmology'] = {}
 
     def has_mcmc(self):
         if len(self.chain_files) > 0:
@@ -1156,14 +1162,14 @@ class PostPDF(object):
         # choose one or more parameters 
         # (enter names or pick from chain column list)
         if num is None:
-            print '\nEnter one or more parameter names (on one line),'
+            print '\nEnter parameter names (all on one line),'
         elif num == 1:
             print '\nEnter a parameter name,'
         else:
             print '\nEnter ' + str(num) + ' parameter names (on one line),'
-        print 'or press Enter to see a list of available parameters:'
+        print 'or enter "l" to see a list of available parameters:'
         parameters = raw_input('> ').split()
-        if len(parameters) == 0:
+        if len(parameters) == 1 and parameters[0].strip() == 'l':
             self.display_parameters(options)
             parameters = self.choose_parameters(options, num,
                                                 allow_extra_parameters)
@@ -1194,11 +1200,67 @@ class PostPDF(object):
 
     def add_derived_parameter(self, new_name, f_str, par_names, 
                               par_indices=None, update_order=True):
-        # only works for simple parameter combinations - what about
-        # more complicated functions like D_A(z)?
+
+        # check whether any cosmology functions are required
+        cosm_fns_required = []
+        for cf in cosmology.functions.keys():
+            if cf in f_str:
+                cosm_fns_required.append(cf)
+
+        if len(cosm_fns_required) > 0:
+            self.set_cosmology_model()
+            # check whether the chain_to_cosmology mapping is defined
+            if self.settings['chain_to_cosmology']:
+                # use existing mapping
+                print 'Need to finish this!'
+            else:
+                for p in ['h', 'omegam', 'omegabhh', 'omegagamma', 
+                          'mnu', 'neff', 'omegak', 'sigma8', 'ns']:
+                    pf_str = ''
+                    while pf_str == '':
+                        pf_str = raw_input('What is ' + p + ' in terms of ' + \
+                                               'the chain parameters?\n' + \
+                                               '(Press Enter to see the ' + \
+                                               'list of chain parameters, ' + \
+                                               'or enter "d" to use a fixed' + \
+                                               ' default value)\n> ')
+                        if pf_str == '':
+                            self.display_parameters()
+                    if pf_str.strip() != 'd':
+                        cosmology.parameters.append(p)
+                        self.settings['chain_to_cosmology'][p] = {}
+                        par_indices = []
+                        chain_params_used = []
+                        for i, cp in enumerate(self.chain.parameters):
+                            if cp in pf_str:
+                                par_indices.append(i)
+                                chain_params_used.append(cp)
+                        self.settings['chain_to_cosmology'][p] \
+                            ['chain_parameters'] = chain_params_used
+                        self.settings['chain_to_cosmology'][p] \
+                            ['function'] = pf_str
+                        pf = lambdify(symbols(chain_params_used), 
+                                      sympify(pf_str), 'numpy')
+                        self.cosmology_parameter_samples.append( \
+                            pf(*[self.chain.samples[:, \
+                                        i+self.chain.first_par_column] \
+                                     for i in par_indices]))
+
+            par_names.extend(cosmology.parameters)
+            for cf in cosm_fns_required:
+                # insert cosmology parameters as extra arguments
+                substrings = [s.strip() for s in f_str.split(')')]
+                new_substrings = []
+                for sub in substrings[:-1]:
+                    if cf in sub:
+                        if sub[-1] != '(':
+                            sub += ', '
+                        sub += ','.join(cosmology.parameters)
+                    new_substrings.append(sub)
+                f_str = ')'.join(new_substrings + [substrings[-1]])
 
         f = lambdify(symbols([str(x) for x in par_names]), 
-                     sympify(f_str), 'numpy')
+                     sympify(f_str), [cosmology.functions, 'numpy'])
         # handle errors from the sympy operations
 
         if par_indices is None:
@@ -1211,12 +1273,12 @@ class PostPDF(object):
                         'supply a list of chain indices.'
                 else:
                     par_indices.append(index[0])
-        if len(par_indices) == len(par_names):
+        if len(par_indices) + len(cosmology.parameters) == len(par_names):
             self.chain.parameters.append(new_name)
             self.chain.column_names.append(new_name)
             new_column = f(\
                 *[self.chain.samples[:,i+self.chain.first_par_column] \
-                      for i in par_indices])
+                      for i in par_indices] + self.cosmology_parameter_samples)
             self.chain.samples = np.hstack((self.chain.samples, 
                                       np.array([new_column]).T))
             if update_order:
@@ -1227,6 +1289,12 @@ class PostPDF(object):
                     'function': f_str,
                     'parameters': par_names,
                     'indices': par_indices}
+
+    def set_cosmology_model(self):
+        if self.model == 'LCDM':
+            cosmology.model_class = cosmology.LCDM
+        else:
+            print 'Model class ' + self.model + ' is not implemented.'
 
     def compute_1d_stats(self, parameters):
         # how to do this if there is no chain, only likelihoods?
