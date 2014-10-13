@@ -1201,6 +1201,19 @@ class PostPDF(object):
     def add_derived_parameter(self, new_name, f_str, par_names, 
                               par_indices=None, update_order=True):
 
+        input_f_str = f_str
+
+        if par_indices is None:
+            par_indices = []
+            for name in par_names:
+                index = np.where(np.array(self.chain.parameters) == name)[0]
+                if len(index) == 0:
+                    print 'Parameter ' + str(name) + ' not found in chain.'
+                    print 'Use the name of an existing parameter or ' + \
+                        'supply a list of chain indices.'
+                else:
+                    par_indices.append(index[0])
+
         # check whether any cosmology functions are required
         cosm_fns_required = []
         for cf in cosmology.functions.keys():
@@ -1210,12 +1223,17 @@ class PostPDF(object):
         if len(cosm_fns_required) > 0:
             self.set_cosmology_model()
             # check whether the chain_to_cosmology mapping is defined
-            if self.settings['chain_to_cosmology']:
-                # use existing mapping
-                print 'Need to finish this!'
-            else:
-                for p in ['h', 'omegam', 'omegabhh', 'omegagamma', 
-                          'mnu', 'neff', 'omegak', 'sigma8', 'ns']:
+            for p in ['h', 'omegam', 'omegabhh', 'omegagamma', 
+                      'mnu', 'neff', 'omegak', 'sigma8', 'ns']:
+                if p in self.settings['chain_to_cosmology']:
+                    p_map = self.settings['chain_to_cosmology'][p]
+                    pf_str = p_map['function']
+                    if pf_str != 'default':
+                        cosmology.parameters.append(p)
+                        chain_params_used = p_map['chain_parameters']
+                        chain_indices = p_map['chain_indices']
+                else:
+                    self.settings['chain_to_cosmology'][p] = {}
                     pf_str = ''
                     while pf_str == '':
                         pf_str = raw_input('What is ' + p + ' in terms of ' + \
@@ -1226,27 +1244,38 @@ class PostPDF(object):
                                                ' default value)\n> ')
                         if pf_str == '':
                             self.display_parameters()
-                    if pf_str.strip() != 'd':
+                    if pf_str.strip() == 'd':
+                        self.settings['chain_to_cosmology'][p] \
+                            ['chain_parameters'] = []
+                        self.settings['chain_to_cosmology'][p] \
+                            ['chain_indices'] = []
+                        self.settings['chain_to_cosmology'][p] \
+                            ['function'] = 'default'
+                    else:
                         cosmology.parameters.append(p)
-                        self.settings['chain_to_cosmology'][p] = {}
-                        par_indices = []
+                        chain_indices = []
                         chain_params_used = []
                         for i, cp in enumerate(self.chain.parameters):
                             if cp in pf_str:
-                                par_indices.append(i)
+                                chain_indices.append(i)
                                 chain_params_used.append(cp)
                         self.settings['chain_to_cosmology'][p] \
                             ['chain_parameters'] = chain_params_used
                         self.settings['chain_to_cosmology'][p] \
+                            ['chain_indices'] = chain_indices
+                        self.settings['chain_to_cosmology'][p] \
                             ['function'] = pf_str
-                        pf = lambdify(symbols(chain_params_used), 
-                                      sympify(pf_str), 'numpy')
-                        self.cosmology_parameter_samples.append( \
-                            pf(*[self.chain.samples[:, \
-                                        i+self.chain.first_par_column] \
-                                     for i in par_indices]))
 
-            par_names.extend(cosmology.parameters)
+                if p in cosmology.parameters:
+                    pf = lambdify(symbols(chain_params_used), 
+                                  sympify(pf_str), 'numpy')
+                    # handle sympy errors
+
+                    self.cosmology_parameter_samples.append( \
+                        pf(*[self.chain.samples[:, \
+                                    i+self.chain.first_par_column] \
+                                 for i in chain_indices]))
+
             for cf in cosm_fns_required:
                 # insert cosmology parameters as extra arguments
                 substrings = [s.strip() for s in f_str.split(')')]
@@ -1259,21 +1288,13 @@ class PostPDF(object):
                     new_substrings.append(sub)
                 f_str = ')'.join(new_substrings + [substrings[-1]])
 
-        f = lambdify(symbols([str(x) for x in par_names]), 
+        f = lambdify(symbols([str(x) for x in \
+                                  par_names + cosmology.parameters]), 
                      sympify(f_str), [cosmology.functions, 'numpy'])
         # handle errors from the sympy operations
 
-        if par_indices is None:
-            par_indices = []
-            for name in par_names:
-                index = np.where(np.array(self.chain.parameters) == name)[0]
-                if len(index) == 0:
-                    print 'Parameter ' + str(name) + ' not found in chain.'
-                    print 'Use the name of an existing parameter or ' + \
-                        'supply a list of chain indices.'
-                else:
-                    par_indices.append(index[0])
-        if len(par_indices) + len(cosmology.parameters) == len(par_names):
+
+        if len(par_indices) == len(par_names):
             self.chain.parameters.append(new_name)
             self.chain.column_names.append(new_name)
             new_column = f(\
@@ -1286,11 +1307,12 @@ class PostPDF(object):
                 self.settings['order'].append(('derived_parameter', 
                                                new_name))
                 self.settings['derived_parameters'][new_name] = {
-                    'function': f_str,
+                    'function': input_f_str,
                     'parameters': par_names,
                     'indices': par_indices}
 
     def set_cosmology_model(self):
+        cosmology.parameters = []
         if self.model == 'LCDM':
             cosmology.model_class = cosmology.LCDM
         else:

@@ -104,8 +104,8 @@ class BaseModel(object):
     def hubble(self, z):
         """ Dimensionless Hubble parameter H(z) (divide by C_HUB_* to get units of 1/*). """
         return self.h*np.sqrt(self.omegam*(1.0+z)**3 + self.omegak*(1.0+z)**2 +\
-                           self.omegagamma*(1.0+z)**4 + \
-                           self.neutrino_density(z) + self.de_density(z))                           
+                                  self.omegagamma*(1.0+z)**4 + \
+                                  self.neutrino_density(z) + self.de_density(z))
     
     def dist_com(self, z):
         """ Dimensionless, comoving distance (multiply by C_HUB_* to get units of *). """
