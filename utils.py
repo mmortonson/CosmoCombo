@@ -3,6 +3,7 @@ import os
 import os.path
 import errno
 import numpy as np
+from sympy import sympify
 
 def check_path(file):
     """ Check whether a path to a file exists, and if not, create it.
@@ -53,7 +54,7 @@ def get_input_integer(prompt, num=1,
     else:
         for i in range(num):
             try:
-                next_value = int(user_input[i])
+                next_value = int(sympify(user_input[i]))
                 values.append(next_value)
             except ValueError as e:
                 print error_text
@@ -78,7 +79,7 @@ def get_input_float(prompt, num=1,
     else:
         for i in range(num):
             try:
-                next_value = float(user_input[i])
+                next_value = float(sympify(user_input[i]))
                 values.append(next_value)
             except ValueError as e:
                 print error_text
