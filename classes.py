@@ -283,6 +283,10 @@ class Session(object):
             if len(self.history['chains']) > 0:
                 chain_history = sorted(self.history['chains'],
                                        key=lambda x: x[0], reverse=True)
+                sort_indices = sorted(range(len(self.history['chains'])),
+                                      key=lambda i: \
+                                          self.history['chains'][i][0],
+                                      reverse=True)
                 options = [ch[1] for ch in chain_history]
                 details = ['Chains:\n' + '\n'.join(
                         [textwrap.fill(s, initial_indent='    ',
@@ -298,8 +302,9 @@ class Session(object):
                 if m.choice == m.exit:
                     pdf.add_chain(*self.define_new_chain())
                 else:
-                    self.history['chains'][m.i_choice][0] += 1
-                    pdf.add_chain(*self.history['chains'][m.i_choice][1:])
+                    self.history['chains'][sort_indices[m.i_choice]][0] += 1
+                    pdf.add_chain(*self.history['chains'] \
+                                       [sort_indices[m.i_choice]][1:])
             else:
                 pdf.add_chain(*self.define_new_chain())
 
@@ -346,11 +351,17 @@ class Session(object):
         pdf = self.choose_pdf()
         if pdf is not None:
             if len(self.history['likelihoods']) > 0:
-                options = [lk[0] for lk in self.history['likelihoods']]
+                lk_history = sorted(self.history['likelihoods'], 
+                                    key=lambda x: x[1], reverse=True)
+                sort_indices = sorted(range(len(self.history['likelihoods'])),
+                                      key=lambda i: \
+                                          self.history['likelihoods'][i][1],
+                                      reverse=True)
+                options = [lk[0] for lk in lk_history]
                 details = ['Likelihoods:\n' + '\n'.join(
                         ['    ' + s + ': ' +  str(lk[2][s]) \
                              for s in sorted(lk[2].keys())]) \
-                               for lk in self.history['likelihoods']]
+                               for lk in lk_history]
                 m = Menu(options=options, more=details,
                          exit_str='New likelihood',
                          header='Choose a likelihood function:\n' + \
@@ -361,8 +372,9 @@ class Session(object):
                     new_lk = self.define_new_likelihood(pdf)
                     pdf.add_likelihood(new_lk[0], **new_lk[2])
                 else:
-                    self.history['likelihoods'][m.i_choice][1] += 1
-                    lk = self.history['likelihoods'][m.i_choice]
+                    self.history['likelihoods'][sort_indices[m.i_choice]][1] \
+                        += 1
+                    lk = self.history['likelihoods'][sort_indices[m.i_choice]]
                     pdf.add_likelihood(lk[0], **lk[2])
             else:
                 new_lk = self.define_new_likelihood(pdf)
