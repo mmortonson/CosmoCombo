@@ -81,10 +81,12 @@ class Session(object):
                                   d['chain_paramname_file'],
                                   d['chain_params_in_header'],
                                   update_order=False)
+                    count = 0
                     for chain in list(self.history['chains']):
-                        if chain[0] == d['chain_name']:
+                        if chain[1] == d['chain_name']:
+                            count = chain[0]
                             self.history['chains'].remove(chain)
-                    self.history['chains'].append((d['chain_name'],
+                    self.history['chains'].append((count, d['chain_name'],
                                                    d['chain_files'],
                                                    d['chain_burn_in'], 
                                                    d['chain_mult_column'],
@@ -97,11 +99,13 @@ class Session(object):
                     print 'Adding likelihood: ' + lk
                     pdf.add_likelihood(lk, update_order=False,
                                        **d['likelihoods'][lk])
+                    count = 0
                     for hist_lk in list(self.history['likelihoods']):
                         if hist_lk[0] == lk:
+                            count = hist_lk[1]
                             self.history['likelihoods'].remove(hist_lk)
                     self.history['likelihoods'].append( \
-                        (lk, d['likelihoods'][lk]))
+                        (lk, count, d['likelihoods'][lk]))
                 elif pdf_element[0] == 'derived_parameter':
                     p = pdf_element[1]
                     print 'Adding derived parameter: ' + p
@@ -277,11 +281,11 @@ class Session(object):
         # or get files and name for new chain (if new, save to file)
         if pdf is not None:
             if len(self.history['chains']) > 0:
-                options = [ch[0] for ch in self.history['chains']]
+                options = [ch[1] for ch in self.history['chains']]
                 details = ['Chains:\n' + '\n'.join(
                         [textwrap.fill(s, initial_indent='    ',
                                        subsequent_indent='        ') \
-                             for s in sorted(ch[1])]) \
+                             for s in sorted(ch[2])]) \
                                for ch in self.history['chains']]
                 m = Menu(options=options, more=details,
                          exit_str='New chain',
@@ -292,7 +296,8 @@ class Session(object):
                 if m.choice == m.exit:
                     pdf.add_chain(*self.define_new_chain())
                 else:
-                    pdf.add_chain(*self.history['chains'][m.i_choice])
+                    self.history['chains'][m.i_choice][0] += 1
+                    pdf.add_chain(*self.history['chains'][m.i_choice][1:])
             else:
                 pdf.add_chain(*self.define_new_chain())
 
@@ -314,7 +319,7 @@ class Session(object):
         first_par_column = utils.get_input_integer( \
             'Column of first chain parameter?\n> ')[0]
         m = Menu(options=['File named as chain label + .paramnames',
-                          'Different file',
+                          'A different file',
                           'Header of chain files'],
                  header='Where are the chain parameter names?')
         m.get_choice()
@@ -331,7 +336,7 @@ class Session(object):
         for chain in list(self.history['chains']):
             if chain[0] == name:
                 self.history['chains'].remove(chain)
-        self.history['chains'].append(chain_settings)
+        self.history['chains'].append([1] + list(chain_settings))
         return chain_settings
 
     # merge with add_chain?
@@ -341,8 +346,8 @@ class Session(object):
             if len(self.history['likelihoods']) > 0:
                 options = [lk[0] for lk in self.history['likelihoods']]
                 details = ['Likelihoods:\n' + '\n'.join(
-                        ['    ' + s + ': ' +  str(lk[1][s]) \
-                             for s in sorted(lk[1].keys())]) \
+                        ['    ' + s + ': ' +  str(lk[2][s]) \
+                             for s in sorted(lk[2].keys())]) \
                                for lk in self.history['likelihoods']]
                 m = Menu(options=options, more=details,
                          exit_str='New likelihood',
@@ -352,13 +357,14 @@ class Session(object):
                 m.get_choice()
                 if m.choice == m.exit:
                     new_lk = self.define_new_likelihood(pdf)
-                    pdf.add_likelihood(new_lk[0], **new_lk[1])
+                    pdf.add_likelihood(new_lk[0], **new_lk[2])
                 else:
+                    self.history['likelihoods'][m.i_choice][1] += 1
                     lk = self.history['likelihoods'][m.i_choice]
-                    pdf.add_likelihood(lk[0], **lk[1])
+                    pdf.add_likelihood(lk[0], **lk[2])
             else:
                 new_lk = self.define_new_likelihood(pdf)
-                pdf.add_likelihood(new_lk[0], **new_lk[1])
+                pdf.add_likelihood(new_lk[0], **new_lk[2])
 
     def define_new_likelihood(self, pdf):
         # if chain exists, choose some parameters from there
@@ -403,7 +409,7 @@ class Session(object):
             lk_dict['means'] = means
             lk_dict['covariance'] = covariance
 
-        new_lk = (name, lk_dict)
+        new_lk = (name, 1, lk_dict)
 
         # check if name is already in history; if so, replace with new
         for lk in list(self.history['likelihoods']):
@@ -1452,11 +1458,12 @@ class MCMCChain(object):
         print textwrap.fill(', '.join(self.parameters))
 
     def remove_burn_in_samples(self):
-        if 0. < self.burn_in < 1.:
+        if 0. <= self.burn_in < 1.:
             n_burn = self.burn_in * np.sum(self.multiplicity)
         elif self.burn_in >= 1.:
             n_burn = int(self.burn_in)
         else:
+            n_burn = 0.
             print 'Invalid burn-in value: ', self.burn_in
             print 'Using full chain.'
         # delta is negative for samples to be removed;
