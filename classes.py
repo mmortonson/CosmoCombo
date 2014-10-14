@@ -1242,26 +1242,28 @@ class PostPDF(object):
 
         if len(cosm_fns_required) > 0:
             self.set_cosmology_model()
-            # check whether the chain_to_cosmology mapping is defined
+            have_cp_samples = bool(len(self.cosmology_parameter_samples))
             for p in ['h', 'omegam', 'omegabhh', 'omegagamma', 
                       'mnu', 'neff', 'omegak', 'sigma8', 'ns']:
+                # check whether the chain_to_cosmology mapping is defined
                 if p in self.settings['chain_to_cosmology']:
                     p_map = self.settings['chain_to_cosmology'][p]
                     pf_str = p_map['function']
                     if pf_str != 'default':
-                        cosmology.parameters.append(p)
+                        if p not in cosmology.parameters:
+                            cosmology.parameters.append(p)
                         chain_params_used = p_map['chain_parameters']
                         chain_indices = p_map['chain_indices']
                 else:
                     self.settings['chain_to_cosmology'][p] = {}
                     pf_str = ''
                     while pf_str == '':
-                        pf_str = raw_input('What is ' + p + ' in terms of ' + \
-                                               'the chain parameters?\n' + \
+                        pf_str = raw_input('\nWhat is ' + p + ' in terms of ' \
+                                               + 'the chain parameters?\n' + \
                                                '(Press Enter to see the ' + \
-                                               'list of chain parameters, ' + \
+                                               'list of chain parameters,\n' + \
                                                'or enter "d" to use a fixed' + \
-                                               ' default value)\n> ')
+                                               ' default value.)\n> ')
                         if pf_str == '':
                             self.display_parameters()
                     if pf_str.strip() == 'd':
@@ -1272,7 +1274,8 @@ class PostPDF(object):
                         self.settings['chain_to_cosmology'][p] \
                             ['function'] = 'default'
                     else:
-                        cosmology.parameters.append(p)
+                        if p not in cosmology.parameters:
+                            cosmology.parameters.append(p)
                         chain_indices = []
                         chain_params_used = []
                         for i, cp in enumerate(self.chain.parameters):
@@ -1286,7 +1289,7 @@ class PostPDF(object):
                         self.settings['chain_to_cosmology'][p] \
                             ['function'] = pf_str
 
-                if p in cosmology.parameters:
+                if p in cosmology.parameters and not have_cp_samples:
                     pf = lambdify(symbols(chain_params_used), 
                                   sympify(pf_str), 'numpy')
                     # handle sympy errors
