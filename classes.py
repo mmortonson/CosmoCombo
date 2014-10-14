@@ -281,12 +281,14 @@ class Session(object):
         # or get files and name for new chain (if new, save to file)
         if pdf is not None:
             if len(self.history['chains']) > 0:
-                options = [ch[1] for ch in self.history['chains']]
+                chain_history = sorted(self.history['chains'],
+                                       key=lambda x: x[0], reverse=True)
+                options = [ch[1] for ch in chain_history]
                 details = ['Chains:\n' + '\n'.join(
                         [textwrap.fill(s, initial_indent='    ',
                                        subsequent_indent='        ') \
                              for s in sorted(ch[2])]) \
-                               for ch in self.history['chains']]
+                               for ch in chain_history]
                 m = Menu(options=options, more=details,
                          exit_str='New chain',
                          header='Choose a chain:\n' + \
