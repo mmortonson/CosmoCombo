@@ -458,7 +458,7 @@ class Session(object):
                                       ' (press Enter to see a list):\n> ')
                 if f_str == '':
                     print 'Available cosmology functions:'
-                    print cosmology.functions.keys()
+                    print '  ' + '\n  '.join(cosmology.functions.keys())
             pdf.add_derived_parameter(name, f_str, par_names)
 
     def compute_1d_stats(self):
