@@ -391,29 +391,31 @@ class Session(object):
         form = m.choice
         parameters = pdf.choose_parameters(allow_extra_parameters=True)
         pdf.add_parameters(parameters)
+        lk_dict = {'form': form, 'parameters': parameters}
         priors = []
-        for p in parameters:
-            if len(pdf.settings['parameters'][p]) != 2:
-                new_prior = utils.get_input_float( \
-                    'Enter lower and upper limits of the prior on ' + \
-                        p + ':\n> ', num=2)
-                priors.append(sorted(new_prior))
-            else:
-                priors.append(pdf.settings['parameters'][p])
 
-            lk_dict = {'form': form, 'parameters': parameters, 
-                       'priors': priors}
+        if form == 'Flat':
+            for p in parameters:
+                if len(pdf.settings['parameters'][p]) != 2:
+                    new_prior = utils.get_input_float( \
+                        'Enter lower and upper limits of the prior on ' + \
+                            p + ':\n> ', num=2)
+                    priors.append(sorted(new_prior))
+                else:
+                    priors.append(pdf.settings['parameters'][p])
 
-        if form in ['Gaussian', 'Inverse Gaussian']:
+        elif form in ['Gaussian', 'Inverse Gaussian']:
 
             means = utils.get_input_float('Enter mean values:\n> ',
                                           num=len(parameters))
-            for p, p_range, mean in zip(parameters, priors, means):
-                if mean < p_range[0] or mean > p_range[1]:
-                    print 'Warning: mean value for ' + p + \
-                      ' is outside the prior.'
             variances = utils.get_input_float('Enter variances:\n> ',
                                               num=len(parameters))
+            for i, p in enumerate(parameters):
+                if len(pdf.settings['parameters'][p]) != 2:
+                    priors.append([means[i] - 5.*np.sqrt(variances[i]),
+                                   means[i] + 5.*np.sqrt(variances[i])])
+                else:
+                    priors.append(pdf.settings['parameters'][p])
             covariance = np.diag(variances)
             for i, j in itertools.combinations(range(len(parameters)), 2):
                 covariance[i, j] = utils.get_input_float( \
@@ -423,6 +425,7 @@ class Session(object):
             lk_dict['means'] = means
             lk_dict['covariance'] = covariance
 
+        lk_dict['priors'] = priors
         new_lk = (name, 1, lk_dict)
 
         # check if name is already in history; if so, replace with new
