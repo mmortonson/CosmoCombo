@@ -386,7 +386,7 @@ class Session(object):
         name = raw_input('Label for likelihood?\n> ')
         m = Menu(options=['Flat', 'Gaussian', 'Inverse Gaussian'], 
                  exit_str=None,
-                 header='Choose the form of the likelihood:\n> ')
+                 header='Choose the form of the likelihood:')
         m.get_choice()
         form = m.choice
         parameters = pdf.choose_parameters(allow_extra_parameters=True)
@@ -439,9 +439,13 @@ class Session(object):
         # add option to add parameter to all chains?
         pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
-            name = raw_input('\nName of the new parameter?\n> ')
-            # check that this is a new name
-
+            name_is_new = False
+            while not name_is_new:
+                name = raw_input('\nName of the new parameter?\n> ')
+                if name in pdf.settings['parameters'].keys():
+                    print 'There is already a parameter with that name.'
+                else:
+                    name_is_new = True
             print '\nExisting parameters required to ' + \
                 'compute the new parameter?'
             par_names = pdf.choose_parameters()
@@ -1509,7 +1513,7 @@ class MCMCChain(object):
         n_samples = len(self.multiplicity)
         for i in range(n_samples):
             for p in likelihood.parameters.keys():
-                j = np.where(np.array(self.parameters) == p)[0] + \
+                j = np.where(np.array(self.parameters) == p)[0][0] + \
                     self.first_par_column
                 parameter_values[p] = self.samples[i, j]
             chisq = likelihood.chi_squared(**parameter_values)
