@@ -63,10 +63,13 @@ def DV_BOSS_DR11(z, *values):
         m_fid.sound_horizon_drag_anderson13()
     return C_HUB_MPC*m.dv_bao(z)/sound_horizon_ratio
 
-def rd_fid_BOSS_DR11(*values):
-    m_fid = LCDM(omegam=0.274, h=0.70, omegabhh=0.0224, 
-                 ns=0.95, sigma8=0.8, mnu=0.0)
-    return m_fid.sound_horizon_drag_anderson13()
+def DA_rd_BOSS_DR11(z, *values):
+    m = model_class(**dict(zip(parameters, values)))
+    return C_HUB_MPC*m.dist_ang_diam(z)/(1.+z)/m.sound_horizon_drag_anderson13()
+
+def DH_rd_BOSS_DR11(z, *values):
+    m = model_class(**dict(zip(parameters, values)))
+    return C_HUB_MPC/m.hubble(z)/m.sound_horizon_drag_anderson13()
 
 def DV_SDSS_DR7_MGS(z, *values):
     m = model_class(**dict(zip(parameters, values)))
@@ -89,7 +92,8 @@ def f_sigma8(z, *values):
 functions = {'DA_BOSS_DR11': np.vectorize(DA_BOSS_DR11),
              'H_BOSS_DR11': np.vectorize(H_BOSS_DR11),
              'DV_BOSS_DR11': np.vectorize(DV_BOSS_DR11),
-             'rd_fid_BOSS_DR11': np.vectorize(rd_fid_BOSS_DR11),
+             'DA_rd_BOSS_DR11': np.vectorize(DA_rd_BOSS_DR11),
+             'DH_rd_BOSS_DR11': np.vectorize(DH_rd_BOSS_DR11),
              'DV_SDSS_DR7_MGS': np.vectorize(DV_SDSS_DR7_MGS),
              'mu_SN': np.vectorize(mu_SN),
              'f_sigma8': np.vectorize(f_sigma8)}
