@@ -1406,8 +1406,12 @@ class PostPDF(object):
 
         for p in parameters:
             cp = self.get_chain_parameter(p)
-            fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
-            print fmt_str.format(p, cp.mean(), cp.standard_deviation())
+            #fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
+            #print fmt_str.format(p, cp.mean(), cp.standard_deviation())
+            fmt_str = '{0:s} = {1:.3g} -{2:.3g} +{3:.3g} (68.27%)'
+            med = cp.median()
+            limits_68 = cp.equal_tail_limits(68.27)
+            print fmt_str.format(p, med, med-limits_68[0], limits_68[1]-med)
 
     def save_contour_data(self, parameters, n_samples, grid_size, smoothing, 
                           contour_pct, contour_levels, X, Y, Z):
