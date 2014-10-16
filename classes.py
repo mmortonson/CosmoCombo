@@ -384,15 +384,21 @@ class Session(object):
         # if chain exists, choose some parameters from there
         # can also add new parameters
         name = raw_input('Label for likelihood?\n> ')
-        m = Menu(options=['Flat', 'Gaussian', 'Inverse Gaussian'], 
+        m = Menu(options=['Flat', 'Gaussian', 
+                          'SNe (Gaussian with analytic marginalization)',
+                          'Inverse Gaussian'], 
                  exit_str=None,
                  header='Choose the form of the likelihood:')
         m.get_choice()
         form = m.choice
-        parameters = pdf.choose_parameters(allow_extra_parameters=True)
-        pdf.add_parameters(parameters)
-        lk_dict = {'form': form, 'parameters': parameters}
+        if form[:3] == 'SNe':
+            form = 'SNe'
+        lk_dict = {'form': form}
         priors = []
+        if form != 'SNe':
+            parameters = pdf.choose_parameters(allow_extra_parameters=True)
+            pdf.add_parameters(parameters)
+            lk_dict['parameters'] = parameters
 
         if form == 'Flat':
             for p in parameters:
@@ -405,7 +411,6 @@ class Session(object):
                     priors.append(pdf.settings['parameters'][p])
 
         elif form in ['Gaussian', 'Inverse Gaussian']:
-
             means = utils.get_input_float('Enter mean values:\n> ',
                                           num=len(parameters))
             variances = utils.get_input_float('Enter variances:\n> ',
@@ -421,9 +426,27 @@ class Session(object):
                 covariance[i, j] = utils.get_input_float( \
                     'Cov(' + parameters[i] + ', ' + parameters[j] + ')?\n> ')[0]
                 covariance[j, i] = covariance[i, j]
-            covariance = covariance.tolist()
             lk_dict['means'] = means
-            lk_dict['covariance'] = covariance
+            lk_dict['covariance'] = covariance.tolist()
+
+        elif form == 'SNe':
+            sn_z_mu_file = raw_input('Name of file with mean SN distance ' + \
+                                         'modulus vs. z?\n> ')
+            sn_z, sn_mu = np.loadtxt(sn_z_mu_file, unpack=True)
+            lk_dict['means'] = list(sn_mu)
+            sn_cov_file = raw_input('Name of file with SN covariance ' + \
+                                        'matrix?\n> ')
+            sn_cov = np.loadtxt(sn_cov_file)
+            lk_dict['covariance'] = sn_cov.tolist()
+            sn_parameters = []
+            for i, z in enumerate(sn_z):
+                p_sn_z = 'mu_SN_z' + str(z)
+                sn_parameters.append(p_sn_z)
+                priors.append([sn_mu[i] - 5.*np.sqrt(sn_cov[i,i]),
+                               sn_mu[i] + 5.*np.sqrt(sn_cov[i,i])])
+            pdf.add_parameters(sn_parameters)
+            lk_dict['parameters'] = sn_parameters
+
 
         lk_dict['priors'] = priors
         new_lk = (name, 1, lk_dict)
@@ -1136,6 +1159,14 @@ class PostPDF(object):
         kwargs['invert'] = False
         if kwargs['form'] == 'Gaussian':
             self.add_gaussian_likelihood(name, **kwargs)
+        elif kwargs['form'] == 'SNe':
+            for p in kwargs['parameters']:
+                # assumes parameter names end in 'z' + the SN redshift
+                sn_z = p.split('z')[-1]
+                print '  z = ' + sn_z
+                self.add_derived_parameter(p, 'mu_SN(' + str(sn_z) + ')', 
+                                           [], [], update_order=False)
+            self.add_gaussian_SN_likelihood(name, **kwargs)
         elif kwargs['form'] == 'Inverse Gaussian':
             kwargs['invert'] = True
             self.add_gaussian_likelihood(name, **kwargs)
@@ -1167,6 +1198,13 @@ class PostPDF(object):
         
     def add_gaussian_likelihood(self, name, **kwargs):
         self.likelihoods[name] = GaussianLikelihood(invert=kwargs['invert'])
+        self.likelihoods[name].set_parameter_means( \
+            **dict(zip(kwargs['parameters'], kwargs['means'])))
+        self.likelihoods[name].set_covariance(kwargs['covariance'],
+                                              kwargs['parameters'])
+
+    def add_gaussian_SN_likelihood(self, name, **kwargs):
+        self.likelihoods[name] = GaussianSNLikelihood(invert=kwargs['invert'])
         self.likelihoods[name].set_parameter_means( \
             **dict(zip(kwargs['parameters'], kwargs['means'])))
         self.likelihoods[name].set_covariance(kwargs['covariance'],
