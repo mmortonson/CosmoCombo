@@ -274,6 +274,21 @@ class Session(object):
                             subplot_pdfs[new_name] = subplot_pdfs[old_name]
                             del subplot_pdfs[old_name]
 
+    def save_pdf(self):
+        pdf = self.choose_pdf(require_data=True)
+        if pdf is not None:
+            pdf_filename = os.path.join('Chains', time.strftime('%Y-%m-%d'),
+                                        'chain_' + '_'.join(pdf.name.split()) \
+                                        + time.strftime('_%Z.%H.%M.%S.txt'))
+            writer = utils.open_with_path(pdf_filename, 'w')
+            header = ''
+            for key in sorted(pdf.settings):
+                header += textwrap.fill(key + ': ' + str(pdf.settings[key]),
+                                    subsequent_indent='    ') + '\n'
+            np.savetxt(writer, pdf.chain.samples, fmt='%.6e', header=header)
+            writer.close()
+            print 'Saved as ' + pdf_filename
+
     def add_chain(self):
         pdf = self.choose_pdf(require_no_chain=True)
         # select from list of currently defined chains (from all pdfs),
