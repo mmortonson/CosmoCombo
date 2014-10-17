@@ -524,14 +524,17 @@ class Session(object):
             print '\nSetting up {0:d}x{1:d} plot.'.format(n_rows, n_cols)
         else:
             e_str = 'Number of {0:s} must be an integer > 0.'
-            n_rows = utils.get_input_integer('\nNumber of subplot rows?\n> ',
-                                             error_text=e_str.format('rows'))[0]
-            n_cols = utils.get_input_integer('Number of subplot columns?\n> ',
-                                             error_text= \
-                                                 e_str.format('columns'))[0]
-        if n_rows < 1 or n_cols < 1:
-            print 'Must have > 0 rows and columns.'
-            self.set_up_plot()
+            n_rows, n_cols = (0, 0)
+            while n_rows < 1 or n_cols < 1:
+                n_rows = utils.get_input_integer( \
+                    '\nNumber of subplot rows?\n> ',
+                    error_text=e_str.format('rows'))[0]
+                n_cols = utils.get_input_integer( \
+                    'Number of subplot columns?\n> ',
+                    error_text=e_str.format('columns'))[0]
+                if n_rows < 1 or n_cols < 1:
+                    print 'Must have > 0 rows and columns.'
+
         self.plot.set_up_plot_grid(n_rows, n_cols)
         self.plot.plot_grid.tight_layout(self.plot.figure)
         plt.show(block=False)
