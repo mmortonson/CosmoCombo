@@ -277,9 +277,15 @@ class Session(object):
     def save_pdf(self):
         pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
-            pdf_filename = os.path.join('Chains', time.strftime('%Y-%m-%d'),
-                                        'chain_' + '_'.join(pdf.name.split()) \
-                                        + time.strftime('_%Z.%H.%M.%S.txt'))
+            file_prefix = os.path.join('Chains', time.strftime('%Y-%m-%d'),
+                                       'chain_' + '_'.join(pdf.name.split()) \
+                                       + time.strftime('_%Z.%H.%M.%S'))
+
+            param_filename = file_prefix + '.paramnames'
+            writer = utils.open_with_path(param_filename, 'w')
+            writer.write('\n'.join(pdf.chain.parameters) + '\n')
+            writer.close()
+            pdf_filename = file_prefix + '_1.txt'
             writer = utils.open_with_path(pdf_filename, 'w')
             header = ''
             for key in sorted(pdf.settings):
@@ -343,6 +349,7 @@ class Session(object):
         m = Menu(options=['File named as chain label + .paramnames',
                           'A different file',
                           'Header of chain files'],
+                 exit_str=None,
                  header='Where are the chain parameter names?')
         m.get_choice()
         paramname_file = None
