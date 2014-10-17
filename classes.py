@@ -549,7 +549,12 @@ class Session(object):
                                    time.strftime('%Z.%H.%M.%S'))
         plot_file = file_prefix + '.eps'
         utils.check_path(plot_file)
-        plt.savefig(plot_file, format='eps', bbox_inches='tight')
+        try:
+            # bug in matplotlib 1.4.0 prevents this from working
+            # (https://github.com/matplotlib/matplotlib/pull/3434)
+            plt.savefig(plot_file, format='eps', bbox_inches='tight')
+        except:
+            plt.savefig(plot_file, format='eps')
         print '\nPlot saved as ' + plot_file
         plot_log_file = file_prefix + '.log'
         self.save_log(filename=plot_log_file)
