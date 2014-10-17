@@ -1601,8 +1601,8 @@ class MCMCChain(object):
                 chisq = -chisq
             self.multiplicity[i] *= np.exp(-0.5*chisq)
             if self.lnlike_column is not None:
-                lnl = self.sample[i,lnlike_column]
-                self.sample[i,lnlike_column] = np.sign(lnl) * \
+                lnl = self.samples[i,self.lnlike_column]
+                self.samples[i,self.lnlike_column] = np.sign(lnl) * \
                     (np.abs(lnl) + 0.5*chisq)
             if print_status:
                 print '    sample', i+1, 'of', n_samples, \
