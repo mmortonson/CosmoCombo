@@ -827,14 +827,22 @@ class Plot(object):
             x_limits = limits[0]
         ax.set_xlim(x_limits)
         ax_settings['x_limits'] = x_limits
-        if len(ax.parameters) == 2:
-            if limits is None:
+        if limits is None:
+            if len(ax.parameters) == 2:
                 y_limits = utils.get_input_float('\nPlot limits for ' + \
                                                      ax.parameters[1] + \
                                                      ' (lower upper)?\n> ', 
                                                  num=2)
             else:
-                y_limits = limits[1]
+                y_limits = utils.get_input_float('\nPlot limits for ' + \
+                                                     'y axis' + \
+                                                     ' (lower upper)?\n> ', 
+                                                 num=2)
+        elif len(limits) == 2:
+            y_limits = limits[1]
+        else:
+            y_limits = None
+        if y_limits is not None:
             ax.set_ylim(y_limits)
             ax_settings['y_limits'] = y_limits
 
