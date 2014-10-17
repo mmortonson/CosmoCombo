@@ -343,7 +343,7 @@ class Session(object):
         lnlike_column = utils.get_input_integer( \
             'Log likelihood column? (Enter -1 if none.)\n> ')[0]
         if lnlike_column < 0:
-            lnlik_column = None
+            lnlike_column = None
         first_par_column = utils.get_input_integer( \
             'Column of first chain parameter?\n> ')[0]
         m = Menu(options=['File named as chain label + .paramnames',
@@ -1598,9 +1598,12 @@ class MCMCChain(object):
                 parameter_values[p] = self.samples[i, j]
             chisq = likelihood.chi_squared(**parameter_values)
             if invert:
-                self.multiplicity[i] *= np.exp(0.5*chisq)
-            else:
-                self.multiplicity[i] *= np.exp(-0.5*chisq)
+                chisq = -chisq
+            self.multiplicity[i] *= np.exp(-0.5*chisq)
+            if self.lnlike_column is not None:
+                lnl = self.sample[i,lnlike_column]
+                self.sample[i,lnlike_column] = np.sign(lnl) * \
+                    (np.abs(lnl) + 0.5*chisq)
             if print_status:
                 print '    sample', i+1, 'of', n_samples, \
                     ': chi squared =', chisq,
