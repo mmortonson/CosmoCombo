@@ -140,7 +140,8 @@ class Session(object):
                         if 'legend' in ax_settings and ax_settings['legend']:
                             self.plot.add_legend(ax=self.plot.axes[row][col])
 
-            self.plot.plot_grid.tight_layout(self.plot.figure)
+            #self.plot.plot_grid.tight_layout(self.plot.figure)
+            self.plot.figure.set_tight_layout(True)
             plt.draw()
 
     def load_history(self):
@@ -536,7 +537,8 @@ class Session(object):
                     print 'Must have > 0 rows and columns.'
 
         self.plot.set_up_plot_grid(n_rows, n_cols)
-        self.plot.plot_grid.tight_layout(self.plot.figure)
+        #self.plot.plot_grid.tight_layout(self.plot.figure)
+        self.plot.figure.set_tight_layout(True)
         plt.show(block=False)
         print '(If you cannot see the plot, try changing the '
         print 'matplotlib backend. Current backend is ' + \
@@ -589,7 +591,8 @@ class Session(object):
         m.get_choice()
         if m.choice != m.exit:
             options[m.choice]()
-            self.plot.plot_grid.tight_layout(self.plot.figure)
+            #self.plot.plot_grid.tight_layout(self.plot.figure)
+            self.plot.figure.set_tight_layout(True)
             plt.draw()
 
     def change_pdf_color(self):
