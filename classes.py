@@ -105,7 +105,7 @@ class Session(object):
                             count = hist_lk[1]
                             self.history['likelihoods'].remove(hist_lk)
                     self.history['likelihoods'].append( \
-                        (lk, count, d['likelihoods'][lk]))
+                        [lk, count, d['likelihoods'][lk]])
                 elif pdf_element[0] == 'derived_parameter':
                     p = pdf_element[1]
                     print 'Adding derived parameter: ' + p
@@ -478,7 +478,7 @@ class Session(object):
         for lk in list(self.history['likelihoods']):
             if lk[0] == name:
                 self.history['likelihoods'].remove(lk)
-        self.history['likelihoods'].append(new_lk)
+        self.history['likelihoods'].append(list(new_lk))
         return new_lk
 
     def add_derived_parameter(self):
@@ -511,7 +511,13 @@ class Session(object):
         pdf = self.choose_pdf(require_data=True)
         if pdf is not None:
             parameters = pdf.choose_parameters()
-            pdf.compute_1d_stats(parameters)
+            m = Menu(options=['mean and standard deviation',
+                              'equal-tail limits',
+                              'upper limit',
+                              'lower limit'], 
+                     exit_str=None, header='Choose statistics to compute:\n> ')
+            m.get_choice()
+            pdf.compute_1d_stats(parameters, stats=m.choice)
 
     def set_up_plot(self, settings=None):
         self.plot = Plot()
@@ -1427,17 +1433,34 @@ class PostPDF(object):
         else:
             print 'Model class ' + self.model + ' is not implemented.'
 
-    def compute_1d_stats(self, parameters):
-        # how to do this if there is no chain, only likelihoods?
-
+    def compute_1d_stats(self, parameters, stats='mean and standard deviation'):
+        print
         for p in parameters:
             cp = self.get_chain_parameter(p)
-            #fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
-            #print fmt_str.format(p, cp.mean(), cp.standard_deviation())
-            fmt_str = '{0:s} = {1:.3g} -{2:.3g} +{3:.3g} (68.27%)'
-            med = cp.median()
-            limits_68 = cp.equal_tail_limits(68.27)
-            print fmt_str.format(p, med, med-limits_68[0], limits_68[1]-med)
+            if stats == 'mean and standard deviation':
+                fmt_str = '{0:s} = {1:.3g} +/- {2:.3g}'
+                print fmt_str.format(p, cp.mean(), cp.standard_deviation())
+            elif stats == 'equal-tail limits':
+                med = cp.median()
+                limits_68 = cp.equal_tail_limits(68.27)
+                limits_95 = cp.equal_tail_limits(95.45)
+                fmt_str = '{0:s} = {1:.3g} -{2:.3g} +{3:.3g} (68.27%), ' + \
+                    '{4:.3g} -{5:.3g} +{6:.3g} (95.45%)'
+                print fmt_str.format(p, med, 
+                                     med-limits_68[0], limits_68[1]-med,
+                                     med-limits_95[0], limits_95[1]-med)
+            elif stats == 'upper limit':
+                limit_68 = cp.upper_limit(68.27)
+                limit_95 = cp.upper_limit(95.45)
+                fmt_str = '{0:s} < {1:.3g} (68.27%), {2:.3g} (95.45%)'
+                print fmt_str.format(p, limit_68, limit_95)
+            elif stats == 'lower limit':
+                limit_68 = cp.lower_limit(68.27)
+                limit_95 = cp.lower_limit(95.45)
+                fmt_str = '{0:s} > {1:.3g} (68.27%), {2:.3g} (95.45%)'
+                print fmt_str.format(p, limit_68, limit_95)
+            else:
+                print 'The statistic "' + stats + '" is not implemented.'
 
     def save_contour_data(self, parameters, n_samples, grid_size, smoothing, 
                           contour_pct, contour_levels, X, Y, Z):
