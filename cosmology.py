@@ -20,6 +20,10 @@ and/or modify the methods (e.g., changing the dark energy model).
            missing a factor of 1/T_CMB_K**4.
 2014-06-02 Replaced sqrt, exp, log imported from math with numpy version.
 2014-10-03 Changed base class name from 'lcdm' to 'BaseModel'.
+2014-10-25 Fixed bugs related to massive neutrinos and added their
+           effect on linear growth. Eliminated omegar; compute total matter
+           and radiation density as (omegab + omegac)(1+z)^{-3} +
+           omegagamma(1+z)^{-4} + omega_nu(z) (=neutrino_density).
 """
 
 import numpy as np
@@ -105,21 +109,32 @@ class BaseModel(object):
 # !!!!! modify this so it's easy to change the default parameters
 # !!!!! to some pre-defined model (e.g. Planck or WMAP-X best fit)
         self.h = kwargs.get('h', 0.6711)
+        # matter density fraction at z=0
+        #  (baryons, CDM, and massive neutrinos)
         self.omegam = kwargs.get('omegam', 0.3175)
         self.omegamhh = self.omegam*self.h**2
+        # baryon density
         self.omegabhh = kwargs.get('omegabhh', 0.022068)
-        self.omegagamma = kwargs.get('omegagamma', 2.469e-5/(self.h**2))
-        #self.omegar = 4.17e-5/(self.h**2) # radiation density including 3.046 neutrinos
+        self.omegab = self.omegabhh/self.h**2
+        # neutrinos
         self.mnu = kwargs.get('mnu', 0.0) # sum of neutrino masses in eV
         self.omeganuhh = self.mnu/93.14
         self.neff = kwargs.get('neff', 3.046) # effective number of neutrinos
-        self.omegar = self.omegagamma
-        if self.mnu == 0.0:
-            self.omegar *= 1. + (7./8.)*(T_NU_K/T_CMB_K)**4*self.neff
+        # CDM density
+        self.omegachh = self.omegamhh - self.omegabhh - self.omeganuhh
+        self.omegac = self.omegachh/self.h**2
+        # radiation (photons only; neutrinos accounted for separately)
+        self.omegagamma = kwargs.get('omegagamma', OMEGA_GAMMA_H2/(self.h**2))
+        # curvature
         self.omegak = kwargs.get('omegak', 0.0)
-        self.omegade = 1.0 - self.omegam - self.omegar - self.omegak
+        # dark energy (cosmological constant)
+        self.omegade = 1.0 - self.omegab - self.omegac - self.omegagamma - \
+          self.neutrino_density(0.) - self.omegak
+        # amplitude of matter fluctuations
         self.sigma8 = kwargs.get('sigma8', 0.8344)
+        # primordial spectral index
         self.ns = kwargs.get('ns', 0.96)
+        # dark energy equation of state
         self.w = -1.0
         # define spline variables/dictionaries
         self.pk_nl_cosmicemu_spl = {}
@@ -148,12 +163,20 @@ class BaseModel(object):
         p = 1.83
         y = 187.e3*self.omeganuhh/(1.+z)
         f_nu_rel_to_nonrel = (1. + (A*y)**p)**(1./p)
-        return self.omegagamma*(1.0+z)**4*(7./8.)*T_NU_K**4*self.neff* \
-                   f_nu_rel_to_nonrel
+        return self.omegagamma*(1.0+z)**4*(7./8.)*(T_NU_K/T_CMB_K)**4* \
+            self.neff*f_nu_rel_to_nonrel
+
+    def d_neutrino_density_dlna(self, z):
+        """ Derivative of neutrino_density w.r.t. ln(a). """
+        A = 0.3173
+        p = 1.83
+        y = 187.e3*self.omeganuhh/(1.+z)
+        return ((A*y)**p/(1.+(A*y)**p) - 4.) * neutrino_density(z)
         
     def hubble(self, z):
         """ Dimensionless Hubble parameter H(z) (divide by C_HUB_* to get units of 1/*). """
-        return self.h*np.sqrt(self.omegam*(1.0+z)**3 + self.omegak*(1.0+z)**2 +\
+        return self.h*np.sqrt((self.omegab+self.omegac)*(1.0+z)**3 + \
+                                  self.omegak*(1.0+z)**2 +\
                                   self.omegagamma*(1.0+z)**4 + \
                                   self.neutrino_density(z) + self.de_density(z))
     
@@ -190,19 +213,20 @@ class BaseModel(object):
     
     def growth_func_ode(self, lna, g_derivs):
         z = np.exp(-lna)-1.0
+        # this includes massive neutrinos, so only valid when non-rel.
         omz = self.omegam*(1.0+z)**3*(self.h/self.hubble(z))**2
         dlnHdlna = 0.5*(self.h/self.hubble(z))**2 * \
-            (-3.0*self.omegam*np.exp(-3.0*lna)-4.0*self.omegar*np.exp(-4.0*lna)\
-             -2.0*self.omegak*np.exp(-2.0*lna)+self.d_de_density_dlna(lna))
+            (-3.0*(self.omegab + self.omegac)*np.exp(-3.0*lna) \
+             -4.0*self.omegagamma*np.exp(-4.0*lna) \
+             -2.0*self.omegak*np.exp(-2.0*lna) + \
+            self.d_neutrino_density_dlna(z) + self.d_de_density_dlna(z))
         return [g_derivs[1], \
                     -(4.0 + dlnHdlna)*g_derivs[1] \
                     - (3.0 + dlnHdlna - 1.5*omz)*g_derivs[0]]
 
     def growth_rate(self, z):
         """ integrate ODE for growth function to find growth rate f. """
-        if self.mnu != 0.0:
-            print 'WARNING: effect of massive neutrinos on growth rate not included.'
-        g_derivs0, lna0 = [1.0, 0.0], np.log(self.omegar/self.omegam)
+        g_derivs0, lna0 = [1.0, 0.0], np.log(self.omegagamma/self.omegam)
         g_ode = integrate.ode(self.growth_func_ode).set_integrator('dopri5')
         g_ode.set_initial_value(g_derivs0, lna0)
         g_ode.integrate(-np.log(1.0+z))
@@ -224,9 +248,7 @@ class BaseModel(object):
 
     def sigma8_z(self, z):
         """ integrate ODE for growth function to find sigma_8(z). """
-        if self.mnu != 0.0:
-            print 'WARNING: effect of massive neutrinos on growth function not included.'
-        g_derivs0, lna0 = [1.0, 0.0], np.log(self.omegar/self.omegam)
+        g_derivs0, lna0 = [1.0, 0.0], np.log(self.omegagamma/self.omegam)
         g_ode = integrate.ode(self.growth_func_ode).set_integrator('dopri5')
         g_ode.set_initial_value(g_derivs0, lna0)
         g_ode.integrate(-np.log(1.0+z))
@@ -250,10 +272,14 @@ class BaseModel(object):
 
     def sound_horizon_rec_hu05(self):
         """ Approximate formula for sound horizon at recombination (in phys. Mpc) from Hu (2005). """
+        if self.mnu != 0.0:
+            print 'WARNING: effect of massive neutrinos on sound horizon not included.'
         return 144.4*(self.omegam*self.h**2/0.14)**(-0.252)*(self.omegabhh/0.024)**(-0.083)
     
     def sound_horizon_drag_percival09(self):
         """ Approximate formula for sound horizon at drag epoch (in phys. Mpc) from Percival et al. (2009). """
+        if self.mnu != 0.0:
+            print 'WARNING: effect of massive neutrinos on sound horizon not included.'
         return 153.5*(self.omegam*self.h**2/0.1326)**(-0.255)*(self.omegabhh/0.02273)**(-0.134)
 
     def sound_horizon_drag_anderson13(self):
@@ -298,6 +324,9 @@ class BaseModel(object):
                             'w': [self.w, -1.3, -0.7],
                             'sigma_8': [self.sigma8, 0.61, 0.9]
                             })
+        if self.mnu != 0.0:
+            print 'WARNING: effect of massive neutrinos not included ' + \
+              'in Cosmic Emulator v2.0 nonlinear power spectrum.'
         path = '/home/mmortonson/Code/CosmicEmu_v2.0'
         k = []
         p = []
@@ -369,11 +398,13 @@ class EDE_DR06(BaseModel):
         self.omegaearly = kwargs.get('omegaearly', 0.01)
         if self.omegak != 0.0:
             print 'WARNING: Doran & Robbers (2006) early dark energy formula assumes a flat universe.'
+        if self.mnu != 0.0:
+            print 'WARNING: massive neutrinos not fully implemented for Doran & Robbers (2006) early dark energy model.'
     
     def de_density(self, z):
         de_frac = (self.omegade - self.omegaearly*(1.0-(1.0+z)**(3.0*self.w0))) / \
                   (self.omegade + self.omegam*(1.0+z)**(-3.0*self.w0)) + \
                   self.omegaearly*(1.0 - (1.0+z)**(3.0*self.w0))
         # should modify this for massive neutrinos - use hubble function?
-        return (self.omegam*(1.0+z)**3 + self.omegar*(1.0+z)**4) / (1.0/de_frac - 1.0)
+        return (self.omegam*(1.0+z)**3 + self.omegagamma*(1.0+z)**4) / (1.0/de_frac - 1.0)
 
