@@ -209,7 +209,7 @@ class Session(object):
             print 'Model name: ' + str(model)
         else:
             name = raw_input('\nLabel for constraint?\n> ')
-            m = Menu(options=['LCDM'], exit_str=None,
+            m = Menu(options=['LCDM', 'wCDM'], exit_str=None,
                      header='Choose a model class:')
             m.get_choice()
             model = m.choice
@@ -1335,8 +1335,11 @@ class PostPDF(object):
         if len(cosm_fns_required) > 0:
             self.set_cosmology_model()
             have_cp_samples = bool(len(self.cosmology_parameter_samples))
-            for p in ['h', 'omegam', 'omegabhh', 'omegagamma', 
-                      'mnu', 'neff', 'omegak', 'sigma8', 'ns']:
+            model_parameters = ['h', 'omegam', 'omegabhh', 'omegagamma', 
+                                'mnu', 'neff', 'omegak', 'sigma8', 'ns']
+            if self.model == 'wCDM':
+                model_parameters.append('w')
+            for p in model_parameters
                 # check whether the chain_to_cosmology mapping is defined
                 if p in self.settings['chain_to_cosmology']:
                     p_map = self.settings['chain_to_cosmology'][p]
@@ -1430,6 +1433,8 @@ class PostPDF(object):
         cosmology.parameters = []
         if self.model == 'LCDM':
             cosmology.model_class = cosmology.LCDM
+        if self.model == 'wCDM':
+            cosmology.model_class = cosmology.wCDM            
         else:
             print 'Model class ' + self.model + ' is not implemented.'
 
