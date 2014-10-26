@@ -1441,7 +1441,7 @@ class PostPDF(object):
         cosmology.parameters = []
         if self.model == 'LCDM':
             cosmology.model_class = cosmology.LCDM
-        if self.model == 'wCDM':
+        elif self.model == 'wCDM':
             cosmology.model_class = cosmology.wCDM            
         else:
             print 'Model class ' + self.model + ' is not implemented.'
