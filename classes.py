@@ -1561,21 +1561,27 @@ class MCMCChain(object):
                 # check that number of columns are the same
 
                 self.samples = np.vstack((self.samples, new_samples))
-        self.mult_column = mult_column
         if mult_column is None:
+            self.mult_column = 0
             self.multiplicity = np.ones(len(self.samples))
+            self.samples = np.vstack((self.multiplicity, self.samples.T)).T
+            if lnlike_column is not None:
+                self.lnlike_column = lnlike_column + 1
+            else:
+                self.lnlike_column = None
+            self.first_par_column = first_par_column + 1            
         else:
+            self.mult_column = mult_column
             self.multiplicity = self.samples[:,mult_column]
-        self.lnlike_column = lnlike_column
-        self.first_par_column = first_par_column
+            self.lnlike_column = lnlike_column
+            self.first_par_column = first_par_column
         if (paramname_file is None) and (not params_in_header):
             paramname_file = '_'.join(chain_files[0].split('_')[:-1]) + \
                 '.paramnames'
         self.parameters = self.get_parameter_names(paramname_file, 
                                                    params_in_header)
         self.column_names = list(self.parameters)
-        if mult_column is not None:
-            self.column_names.insert(mult_column, 'mult')
+        self.column_names.insert(mult_column, 'mult')
         if lnlike_column is not None:
             self.column_names.insert(lnlike_column, '-ln(L)')
         self.burn_in = burn_in
