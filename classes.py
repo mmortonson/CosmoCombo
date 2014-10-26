@@ -1339,7 +1339,7 @@ class PostPDF(object):
                                 'mnu', 'neff', 'omegak', 'sigma8', 'ns']
             if self.model == 'wCDM':
                 model_parameters.append('w')
-            for p in model_parameters
+            for p in model_parameters:
                 # check whether the chain_to_cosmology mapping is defined
                 if p in self.settings['chain_to_cosmology']:
                     p_map = self.settings['chain_to_cosmology'][p]

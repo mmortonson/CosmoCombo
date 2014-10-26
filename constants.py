@@ -22,15 +22,15 @@ RAD_CONST_ERG_CM3_K4 = 7.56577e-15
 # critical density at present in h^2 g cm^{-3}
 RHO_CRIT_H2_G_CM3 = 3./(8000.*np.pi*scipy.constants.G*HUB_S**2)
 
+# present CMB temperature
+T_CMB_K = 2.725
+
 # photon density fraction at present, Omega_gamma*h^2
 OMEGA_GAMMA_H2 = RAD_CONST_ERG_CM3_K4*T_CMB_K**4/(C_G_ERG*RHO_CRIT_H2_G_CM3)
 
 # redshift of recombination
 # !!!!! replace this with functions to calculate zrec in other modules
 ZREC_APPROX = 1090.0
-
-# present CMB temperature
-T_CMB_K = 2.725
 
 # present neutrino temperature
 T_NU_K = (4./11.)**(1./3.) * T_CMB_K
