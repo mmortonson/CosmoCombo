@@ -337,6 +337,9 @@ class Session(object):
                 new_files = glob.glob(f)
                 if len(new_files) == 0:
                     print 'No files matching ' + f + ' found.'
+                elif not np.array([os.path.isfile(nf) \
+                                   for nf in new_files]).all():
+                    print 'Some of the files specified are not valid.'
                 else:
                     files += new_files
         name = raw_input('Label for chain?\n> ')
