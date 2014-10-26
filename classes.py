@@ -332,8 +332,13 @@ class Session(object):
 
     def define_new_chain(self):
         files = []
-        for f in raw_input('\nChain file names?\n> ').split():
-            files += glob.glob(f)
+        while len(files) == 0:
+            for f in raw_input('\nChain file names?\n> ').split():
+                new_files = glob.glob(f)
+                if len(new_files) == 0:
+                    print 'No files matching ' + f + ' found.'
+                else:
+                    files += new_files
         name = raw_input('Label for chain?\n> ')
         burn_in = utils.get_input_float( \
             'Burn-in fraction or number of samples?\n> ')[0]
