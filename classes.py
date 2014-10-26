@@ -523,7 +523,7 @@ class Session(object):
                               'equal-tail limits',
                               'upper limit',
                               'lower limit'], 
-                     exit_str=None, header='Choose statistics to compute:\n> ')
+                     exit_str=None, header='Choose statistics to compute:')
             m.get_choice()
             pdf.compute_1d_stats(parameters, stats=m.choice)
 
@@ -1218,9 +1218,9 @@ class PostPDF(object):
             for p in kwargs['parameters']:
                 # assumes parameter names end in 'z' + the SN redshift
                 sn_z = p.split('z')[-1]
-                print '  z = ' + sn_z
                 self.add_derived_parameter(p, 'mu_SN(' + str(sn_z) + ')', 
                                            [], [], update_order=False)
+                print '  z = ' + sn_z
             self.add_gaussian_SN_likelihood(name, **kwargs)
         elif kwargs['form'] == 'Inverse Gaussian':
             kwargs['invert'] = True
