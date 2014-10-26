@@ -1619,10 +1619,11 @@ class MCMCChain(object):
         # 1st positive value is the multiplicity for the 1st retained sample
         delta = np.cumsum(self.multiplicity) - n_burn
         burn_index = np.where(delta > 0)[0][0]
-        self.samples = self.samples[burn_index:,:]
         self.multiplicity = self.multiplicity[burn_index:]
         self.multiplicity[0] = delta[burn_index]
-
+        self.samples = self.samples[burn_index:,:]
+        self.samples[0,self.mult_column] = delta[burn_index]
+        
     def thin(self, thinning_factor):
         # would be more accurate to account for varying multiplicities
         self.samples = self.samples[::thinning_factor,:]
@@ -1645,6 +1646,7 @@ class MCMCChain(object):
             if invert:
                 chisq = -chisq
             self.multiplicity[i] *= np.exp(-0.5*chisq)
+            self.samples[i,self.mult_column] = self.multiplicity[i]
             if self.lnlike_column is not None:
                 lnl = self.samples[i,self.lnlike_column]
                 self.samples[i,self.lnlike_column] = np.sign(lnl) * \
