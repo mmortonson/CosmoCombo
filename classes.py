@@ -30,9 +30,6 @@ class Session(object):
                                          name)
         self.plot = None
         self.pdfs = []
-
-        for attr in ['name', 'log_file']:
-            self.settings[attr] = getattr(self, attr)
         self.settings['pdfs'] = {}
 
         # check for file with inputs from all previous sessions
@@ -58,12 +55,16 @@ class Session(object):
         # if existing log found, set up environment using old settings
         if log_reader:
             print 'Using settings from ' + old_log_file
+            self.log_file = old_log_file
             self.load_log(log_reader)
         # if not found, notify that new log file is assumed
         elif self.save:
             print 'No log file found. Creating new file:\n    ' + \
                 self.log_file
 
+        for attr in ['name', 'log_file']:
+            self.settings[attr] = getattr(self, attr)
+            
     def load_log(self, reader):
         log_settings = json.loads(reader.read())
         reader.close()
