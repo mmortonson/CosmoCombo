@@ -75,6 +75,10 @@ def DH_rd_BOSS_DR11(z, *values):
     m = model_class(**dict(zip(parameters, values)))
     return C_HUB_MPC/m.hubble(z)/m.sound_horizon_drag_anderson13()
 
+def rd_DV(z, *values):
+    m = model_class(**dict(zip(parameters, values)))
+    return m.sound_horizon_drag_anderson13()/(C_HUB_MPC*m.dv_bao(z))
+
 def DV_SDSS_DR7_MGS(z, *values):
     m = model_class(**dict(zip(parameters, values)))
     m_fid = LCDM(omegam=0.31, h=0.67, omegabhh=0.02155, 
@@ -98,6 +102,7 @@ functions = {'DA_BOSS_DR11': np.vectorize(DA_BOSS_DR11),
              'DV_BOSS_DR11': np.vectorize(DV_BOSS_DR11),
              'DA_rd_BOSS_DR11': np.vectorize(DA_rd_BOSS_DR11),
              'DH_rd_BOSS_DR11': np.vectorize(DH_rd_BOSS_DR11),
+             'rd_DV': np.vectorize(rd_DV),
              'DV_SDSS_DR7_MGS': np.vectorize(DV_SDSS_DR7_MGS),
              'mu_SN': np.vectorize(mu_SN),
              'f_sigma8': np.vectorize(f_sigma8)}
