@@ -1459,7 +1459,7 @@ class PostPDF(object):
                 limits_68 = cp.equal_tail_limits(68.27)
                 limits_95 = cp.equal_tail_limits(95.45)
                 fmt_str = '{0:s} = {1:.3g} -{2:.3g} +{3:.3g} (68.27%), ' + \
-                    '{4:.3g} -{5:.3g} +{6:.3g} (95.45%)'
+                    '-{4:.3g} +{5:.3g} (95.45%)'
                 print fmt_str.format(p, med, 
                                      med-limits_68[0], limits_68[1]-med,
                                      med-limits_95[0], limits_95[1]-med)
