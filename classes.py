@@ -1341,8 +1341,9 @@ class PostPDF(object):
             if cf in f_str:
                 cosm_fns_required.append(cf)
 
+        self.set_cosmology_model()
+            
         if len(cosm_fns_required) > 0:
-            self.set_cosmology_model()
             have_cp_samples = bool(len(self.cosmology_parameter_samples))
             model_parameters = ['h', 'omegam', 'omegabhh', 'omegagamma', 
                                 'mnu', 'neff', 'omegak', 'sigma8', 'ns']
