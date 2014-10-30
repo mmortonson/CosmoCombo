@@ -1152,7 +1152,7 @@ class PostPDF(object):
                                      'otherwise choose "New":')
                         m.get_choice()
                         if m.choice == m.exit:
-                            extra_parameters.append(m.choice)
+                            extra_parameters.append(p)
                             lk_chain_parameters.append(None)
                         else:
                             self.chain.parameters[ \
@@ -1437,6 +1437,9 @@ class PostPDF(object):
                 new_column = f(\
                     *[self.chain.samples[:,i+self.chain.first_par_column] \
                       for i in par_indices])
+            # need to test this more: crashes in some cases when
+            # adding a chain to existing likelihoods that depend
+            # on cosmology functions
             self.chain.samples = np.hstack((self.chain.samples, 
                                       np.array([new_column]).T))
             if update_order:
