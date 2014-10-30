@@ -902,7 +902,8 @@ class Plot(object):
             ax.legend(handles=patches, frameon=False)
         self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]['legend'] = True
 
-    def plot_1d_pdf(self, ax, pdf, bins_per_sigma=5, p_min_frac=0.01,
+    def plot_1d_pdf(self, ax, pdf, n_samples=5000, grid_size=100,
+                    smoothing=1.0, p_min_frac=0.01,
                     color=None):
         ax.pdfs[pdf.name] = pdf
         ax_settings = self.settings['{0:d}.{1:d}'.format(ax.row, ax.col)]
@@ -910,20 +911,32 @@ class Plot(object):
         if pdf.name not in set_pdfs:
             set_pdfs[pdf.name] = {}
         parameter = pdf.get_chain_parameter(ax.parameters[0])
-        bin_width = parameter.standard_deviation() / float(bins_per_sigma)
-        number_of_bins = (parameter.values.max()-parameter.values.min())/ \
-                             bin_width
-        pdf_1d, bin_edges = np.histogram(parameter.values, bins=number_of_bins,
-                                         weights=parameter.chain.multiplicity, 
-                                         density=True)
-        bin_centers = 0.5*(bin_edges[:-1] + bin_edges[1:])
-        # trim bins at either end with prob./max(pdf_1d) < p_min_frac
+
+        # draw random samples from the chains with probability
+        # proportional to multiplicity weight
+        mult = pdf.chain.multiplicity
+        indices = np.random.choice(len(mult), n_samples,
+                                   p=mult/np.sum(mult))
+        p_samples = parameter.values[indices]
+
+        # estimate PDF with KDE
+        kde = stats.gaussian_kde(p_samples)
+        kde_bw = smoothing * kde.covariance_factor()
+        kde.set_bandwidth(kde_bw)
+
+        # evaluate the PDF on a regular grid
+        border = 0.05*(np.max(p_samples) - np.min(p_samples))
+        p_limits = [np.min(p_samples)-border, np.max(p_samples)+border]
+        grid = np.linspace(*p_limits, num=grid_size)
+        pdf_1d = kde(grid)
+        
+        # trim points at either end with prob./max(pdf_1d) < p_min_frac
         while pdf_1d[0] < p_min_frac*pdf_1d.max():
             pdf_1d = np.delete(pdf_1d, 0)
-            bin_centers = np.delete(bin_centers, 0)
+            grid = np.delete(grid, 0)
         while pdf_1d[-1] < p_min_frac*pdf_1d.max():
             pdf_1d = np.delete(pdf_1d, -1)
-            bin_centers = np.delete(bin_centers, -1)
+            grid = np.delete(grid, -1)
 
         if color is None:
             if pdf.settings['color'] is None:
@@ -931,7 +944,7 @@ class Plot(object):
             else:
                 color = pdf.settings['color']
 
-        ax.plot(bin_centers, pdf_1d, color=color, label=pdf.name)
+        ax.plot(grid, pdf_1d, color=color, label=pdf.name)
 
         if 'xlabel' in ax_settings:
             xlabel = ax_settings['xlabel']
