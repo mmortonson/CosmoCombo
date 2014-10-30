@@ -87,14 +87,14 @@ class Session(object):
                         if chain[1] == d['chain_name']:
                             count = chain[0]
                             self.history['chains'].remove(chain)
-                    self.history['chains'].append((count, d['chain_name'],
+                    self.history['chains'].append([count, d['chain_name'],
                                                    d['chain_files'],
                                                    d['chain_burn_in'], 
                                                    d['chain_mult_column'],
                                                    d['chain_lnlike_column'],
                                                    d['chain_first_par_column'],
                                                    d['chain_paramname_file'],
-                                                   d['chain_params_in_header']))
+                                                   d['chain_params_in_header']])
                 elif pdf_element[0] == 'likelihood':
                     lk = pdf_element[1]
                     print 'Adding likelihood: ' + lk
