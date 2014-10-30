@@ -1416,6 +1416,10 @@ class PostPDF(object):
                     new_substrings.append(sub)
                 f_str = ')'.join(new_substrings + [substrings[-1]])
 
+        # need to fix this for cases where both cosmology functions
+        # and regular parameters are required
+
+        
         f = lambdify(symbols([str(x) for x in \
                                   par_names + cosmology.parameters]), 
                      sympify(f_str), [cosmology.functions, 'numpy'])
@@ -1425,9 +1429,14 @@ class PostPDF(object):
         if len(par_indices) == len(par_names):
             self.chain.parameters.append(new_name)
             self.chain.column_names.append(new_name)
-            new_column = f(\
-                *[self.chain.samples[:,i+self.chain.first_par_column] \
+            if len(cosm_fns_required) > 0:
+                new_column = f(\
+                    *[self.chain.samples[:,i+self.chain.first_par_column] \
                       for i in par_indices] + self.cosmology_parameter_samples)
+            else:
+                new_column = f(\
+                    *[self.chain.samples[:,i+self.chain.first_par_column] \
+                      for i in par_indices])
             self.chain.samples = np.hstack((self.chain.samples, 
                                       np.array([new_column]).T))
             if update_order:
