@@ -984,6 +984,8 @@ class Plot(object):
                                              contour_pct)
         if contour_data is None:
 
+            print 'Computing new contours...'
+            
             par_x = pdf.get_chain_parameter(ax.parameters[0])
             par_y = pdf.get_chain_parameter(ax.parameters[1])
 
@@ -1215,9 +1217,9 @@ class PostPDF(object):
                         par_settings['chain_parameter'] = m.choice
 
         self.add_parameters(self.chain.parameters)
-        self.settings['contour_data_files'] = []
         if update_order:
             self.settings['order'].append(('chain', name))
+            self.settings['contour_data_files'] = []
 
     def add_likelihood(self, name, update_order=True, **kwargs):
         # check if name is unique (not already in self.likelihoods)
@@ -1225,6 +1227,7 @@ class PostPDF(object):
         self.settings['likelihoods'][name] = kwargs
         if update_order:
             self.settings['order'].append(('likelihood', name))
+            self.settings['contour_data_files'] = []
         kwargs['invert'] = False
         if kwargs['form'] == 'Gaussian':
             self.add_gaussian_likelihood(name, **kwargs)
@@ -1263,7 +1266,6 @@ class PostPDF(object):
         self.add_parameters(kwargs['parameters'])
         for p, p_range in zip(kwargs['parameters'], kwargs['priors']):
             self.settings['parameters'][p] = p_range
-        self.settings['contour_data_files'] = []
         
     def add_gaussian_likelihood(self, name, **kwargs):
         self.likelihoods[name] = GaussianLikelihood(invert=kwargs['invert'])
@@ -1523,6 +1525,7 @@ class PostPDF(object):
     def load_contour_data(self, parameters, n_samples, grid_size, 
                           smoothing, contour_pct):
         contour_data = None
+        print self.settings['contour_data_files']
         for f in self.settings['contour_data_files']:
             reader = utils.open_if_exists(f, 'r')
             test_parameters = reader.readline().split('#')[0].split()
@@ -1542,6 +1545,7 @@ class PostPDF(object):
                             zip(test_contour_pct, contour_pct)])
 
             if match:
+                print 'Plotting contours from ' + f
                 contour_levels = [float(x) for x in \
                                       reader.readline().split('#')[0].split()]
                 X, Y, Z = np.loadtxt(reader, skiprows=1, unpack=True)
