@@ -96,6 +96,12 @@ def f_sigma8(z, *values):
     m = model_class(**dict(zip(parameters, values)))
     return m.growth_rate_gamma(z)*m.sigma8_z_gamma(z)
 
+def dF_AP_BOSS_DR10(z, *values):
+    m = model_class(**dict(zip(parameters, values)))
+    m_fid = LCDM(omegam=0.292, h=0.69, omegabhh=0.022,
+                 ns=0.965, sigma8=0.82, mnu=0.0)
+    return m.dist_ang_diam(z)*m.hubble(z) - \
+      m_fid.dist_ang_diam(z)*m_fid.hubble(z)
 
 functions = {'DA_BOSS_DR11': np.vectorize(DA_BOSS_DR11),
              'H_BOSS_DR11': np.vectorize(H_BOSS_DR11),
@@ -105,7 +111,8 @@ functions = {'DA_BOSS_DR11': np.vectorize(DA_BOSS_DR11),
              'rd_DV': np.vectorize(rd_DV),
              'DV_SDSS_DR7_MGS': np.vectorize(DV_SDSS_DR7_MGS),
              'mu_SN': np.vectorize(mu_SN),
-             'f_sigma8': np.vectorize(f_sigma8)}
+             'f_sigma8': np.vectorize(f_sigma8),
+             'dF_AP_BOSS_DR10': np.vectorize(dF_AP_BOSS_DR10)}
 
 
 class BaseModel(object):
