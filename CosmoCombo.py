@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
-import classes
 import time
 import argparse
 from collections import OrderedDict
+from session import Session
+
 
 current_time = time.strftime('%Z.%H.%M.%S')
 
@@ -18,13 +19,13 @@ args = parser.parse_args()
 
 if args.log:
     if args.dir:
-        session = classes.Session(args.log, path=args.dir, 
-                                  save=not args.no_log)
+        session = Session(args.log, path=args.dir, 
+                          save=not args.no_log)
     else:
-        session = classes.Session(args.log, save=not args.no_log)
+        session = Session(args.log, save=not args.no_log)
 else:
-    session = classes.Session('session.' + current_time + '.log',
-                              save=not args.no_log)
+    session = Session('session.' + current_time + '.log',
+                      save=not args.no_log)
 
 # - set up a new plot
 # - define a new chain or likelihood function
