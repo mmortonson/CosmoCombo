@@ -15,4 +15,5 @@ cosmological models from combinations of data. The main features are:
 - Save and restore previous sessions.
 
 The main script is `CosmoCombo.py`. Running it will bring up a menu of options.
-Usually the first step is to load an MCMC output file.
+Usually the first steps are to set up a new joint constraint and then 
+load an MCMC parameter file.
