@@ -17,3 +17,54 @@ cosmological models from combinations of data. The main features are:
 The main script is `CosmoCombo.py`. Running it will bring up a menu of options.
 Usually the first steps are to set up a new joint constraint and then 
 load an MCMC parameter file.
+
+### Getting started
+
+1. Go to the [Planck Legacy Archive] and change the "Release" tab to 
+   "PR1 - 2013" (this accesses the first Planck data release; the second
+   release is not yet supported).
+1. Use the menus to navigate to the "Cosmology Products" page, then select the
+   "Cosmological Parameters" category and download 
+   `COM_CosmoParams_base_planck_lowl_lowLike_post_lensing_R1.10.tar.gz`.
+   (If you have trouble finding this file, try [this link].)
+1. Move the downloaded file to a directory and extract the files 
+   (`tar -xzvf` followed by the name of the downloaded file). The following
+   steps assume the files are in a directory called `/mcmc`, but you
+   can put them anywhere as long as you substitute your directory for 
+   `/mcmc` below.
+1. Go to the CosmoCombo directory and start the program (`./CosmoCombo.py`).
+1. Select "Set up new joint constraint" (option 0). Enter `Planck` as the label
+   and choose LCDM for the model class.
+1. Select "Add MCMC chain" from the menu and choose the constraint "Planck".
+   For the chain file names, enter
+   `/mcmc/base_planck_lowl_lowLike_post_lensing/base/planck_lowl_lowLike/base_planck_lowl_lowLike_post_lensing_[1-8].txt`.
+   (Make sure to enter the full directory path if there are any problems 
+   with this step; e.g. write out your home directory instead of using `~`.)
+1. Enter `Planck LCDM` as the chain label and enter `0`, `0`, `1`, `2`, and 
+   `0` for the next five questions.
+1. At the main menu again, select "Compute marginalized 1D statistics" and 
+   choose the constraint "Planck".
+1. Enter `l` to see all of the available parameters, then enter `omegam sigma8`
+   and choose "mean and standard deviation". You should see
+   `omegam = 0.306 +/- 0.0133` and `sigma8 = 0.823 +/- 0.00954`.
+1. At the main menu, select "Set up plot" and enter `1` for each of the next
+   two questions. An empty plot area should appear.
+1. Choose "Plot constraint" from the menu and select the "Planck" constraint.
+   Enter `omegam sigma8` again for the parameter names, then enter `0.25 0.37` 
+   for the omegam limits and `0.77 0.87` for sigma8. Enter `0 0 1` for the 
+   RGB values. You should see two blue contours, showing the 68% and 95% 
+   confidence regions for the parameters omegam and sigma8.
+1. Select "Save plot" from the menu; the plot will be saved as an eps file
+   in a directory in `Plots/` labeled by the current date.
+1. Keep exploring the options in the menu, or choose "Exit" for now. When you
+   exit, the name of the log file for the session is displayed. A previous 
+   session can be resumed by using the `-l` option to specify a session log 
+   file, e.g. `./CosmoCombo.py -l session.PDT.12.34.56.log`. If there are
+   multiple sessions with the same file name, the most recent one is selected
+   by default; to use an older one instead, specify its directory name 
+   with the `-d` option.
+
+
+
+[Planck Legacy Archive]: http://pla.esac.esa.int/pla/
+[this link]: http://pla.esac.esa.int/pla-sl/data-action?COSMOLOGY.COSMOLOGY_OID=703
